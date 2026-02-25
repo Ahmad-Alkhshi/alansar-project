@@ -1,0 +1,98 @@
+import { supabase } from '../config/supabase.js';
+
+export const submitOrder = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token مطلوب' });
+    }
+
+    const { data: recipient } = await supabase
+      .from('recipients')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (!recipient) {
+      return res.status(404).json({ error: 'رابط غير صحيح' });
+    }
+
+    if (recipient.order_submitted) {
+      return res.status(400).json({ error: 'تم تأكيد الطلب مسبقاً' });
+    }
+
+    const { data: cart } = await supabase
+      .from('carts')
+      .select('*, cart_items(*, products(*))')
+      .eq('recipient_id', recipient.id)
+      .single();
+
+    if (!cart || cart.cart_items.length === 0) {
+      return res.status(400).json({ error: 'السلة فارغة' });
+    }
+
+    // التحقق من المخزون
+    for (const item of cart.cart_items) {
+      if (item.quantity > item.products.stock) {
+        return res.status(400).json({
+          error: `المنتج ${item.products.name} غير متوفر بالكمية المطلوبة`,
+        });
+      }
+    }
+
+    // إنشاء الطلب
+    const { data: order } = await supabase
+      .from('orders')
+      .insert([{
+        recipient_id: recipient.id,
+        final_total: cart.total,
+        status: 'pending',
+      }])
+      .select()
+      .single();
+
+    // نقل العناصر من السلة إلى الطلب
+    const orderItems = cart.cart_items.map(item => ({
+      order_id: order.id,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+    }));
+
+    await supabase.from('order_items').insert(orderItems);
+
+    // تحديث المخزون
+    for (const item of cart.cart_items) {
+      await supabase
+        .from('products')
+        .update({ stock: item.products.stock - item.quantity })
+        .eq('id', item.product_id);
+    }
+
+    // تحديث حالة المستفيد
+    await supabase
+      .from('recipients')
+      .update({ order_submitted: true })
+      .eq('id', recipient.id);
+
+    res.json({ message: 'تم تأكيد الطلب بنجاح', order });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل في تأكيد الطلب' });
+  }
+};
+
+export const getAllOrders = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, recipients(*), order_items(*, products(*))')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'فشل في جلب الطلبات' });
+  }
+};

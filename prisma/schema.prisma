@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Recipient {
+  id              String    @id @default(cuid())
+  name            String
+  phone           String    @unique
+  token           String    @unique
+  tokenExpiresAt  DateTime?
+  orderSubmitted  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  cart            Cart?
+  order           Order?
+  
+  @@index([token])
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  price       Int
+  stock       Int         @default(0)
+  imageUrl    String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+}
+
+model Cart {
+  id          String      @id @default(cuid())
+  recipientId String      @unique
+  status      String      @default("draft") // draft, submitted
+  total       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  recipient   Recipient   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  items       CartItem[]
+}
+
+model CartItem {
+  id          String   @id @default(cuid())
+  cartId      String
+  productId   String
+  quantity    Int      @default(1)
+  unitPrice   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  cart        Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
+  
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  recipientId String      @unique
+  finalTotal  Int
+  status      String      @default("pending") // pending, prepared, delivered
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  recipient   Recipient   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String
+  quantity    Int
+  unitPrice   Int
+  createdAt   DateTime @default(now())
+  
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+}
