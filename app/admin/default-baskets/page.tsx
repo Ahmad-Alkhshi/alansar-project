@@ -108,7 +108,7 @@ export default function DefaultBasketsPage() {
           <div className="flex gap-4">
             <input
               type="number"
-              placeholder="قيمة السلة (ل.س)"
+              placeholder="قيمة السلة ()"
               id="basketValue"
               className="border-2 border-gray-300 rounded-lg px-4 py-2 flex-1"
             />
@@ -132,7 +132,7 @@ export default function DefaultBasketsPage() {
             <div key={basket.id} className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-2xl font-bold text-primary">
-                  {basket.basket_value.toLocaleString('ar-SY')} ل.س
+                  {basket.basket_value.toLocaleString('ar-SY')} 
                 </h3>
                 <button
                   onClick={() => startEdit(basket)}
@@ -149,7 +149,7 @@ export default function DefaultBasketsPage() {
                       <div key={product.id} className="flex items-center justify-between bg-gray-50 p-3 rounded">
                         <span className="font-medium">{product.name}</span>
                         <div className="flex items-center gap-3">
-                          <span className="text-gray-600">{product.price.toLocaleString('ar-SY')} ل.س</span>
+                          <span className="text-gray-600">{product.price.toLocaleString('ar-SY')} </span>
                           <input
                             type="number"
                             min="0"
@@ -166,7 +166,7 @@ export default function DefaultBasketsPage() {
                   </div>
                   <div className="border-t pt-4 mb-4">
                     <div className="text-xl font-bold text-primary">
-                      المجموع: {calculateTotal().toLocaleString('ar-SY')} ل.س
+                      المجموع: {calculateTotal().toLocaleString('ar-SY')} 
                     </div>
                   </div>
                   <div className="flex gap-3">

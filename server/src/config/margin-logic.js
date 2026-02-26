@@ -23,7 +23,7 @@ export function checkMarginAllowed(cartItems) {
       allowed: false,
       currentTotal,
       difference,
-      message: `تجاوز الحد المسموح (${difference.toLocaleString()} ل.س)`,
+      message: `تجاوز الحد المسموح (${difference.toLocaleString()} )`,
     };
   }
 

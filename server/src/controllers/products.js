@@ -6,6 +6,7 @@ export const getProducts = async (req, res) => {
       .from('products')
       .select('*')
       .eq('is_active', true)
+      .order('display_order', { ascending: true })
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -90,5 +91,23 @@ export const deleteProduct = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'فشل في حذف المنتج' });
+  }
+};
+
+export const updateProductsOrder = async (req, res) => {
+  try {
+    const { products } = req.body;
+
+    for (const product of products) {
+      await supabase
+        .from('products')
+        .update({ display_order: product.order })
+        .eq('id', product.id);
+    }
+
+    res.json({ message: 'تم تحديث الترتيب بنجاح' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'فشل في تحديث الترتيب' });
   }
 };

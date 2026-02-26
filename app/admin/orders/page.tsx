@@ -188,7 +188,7 @@ export default function AdminOrdersPage() {
                         {order.final_total.toLocaleString(
                           "ar-SY",
                         )}{" "}
-                        ل.س
+                        
                       </div>
                       <span
                         className={`px-4 py-2 rounded text-white ${
@@ -226,14 +226,14 @@ export default function AdminOrdersPage() {
                               </span>
                               <span className="text-gray-600">
                                 {item.unit_price.toLocaleString("ar-SY")}{" "}
-                                ل.س
+                                
                               </span>
                               <span className="font-bold text-primary">
                                 {(
                                   item.quantity *
                                   item.unit_price
                                 ).toLocaleString("ar-SY")}{" "}
-                                ل.س
+                                
                               </span>
                             </div>
                           </div>
@@ -274,7 +274,7 @@ export default function AdminOrdersPage() {
                     </div>
                     <div className="text-left">
                       <div className="text-2xl font-bold text-primary mb-2">
-                        {request.orders.final_total.toLocaleString("ar-SY")} ل.س
+                        {request.orders.final_total.toLocaleString("ar-SY")} 
                       </div>
                       <span
                         className={`px-4 py-2 rounded text-white ${

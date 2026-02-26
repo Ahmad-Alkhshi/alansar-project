@@ -3,6 +3,23 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import * as XLSX from 'xlsx'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
@@ -13,6 +30,62 @@ interface Product {
   stock: number
   imageUrl: string | null
   isActive: boolean
+  display_order?: number
+}
+
+function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisibility, deleteProduct }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: product.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <tr ref={setNodeRef} style={style} className="border-b hover:bg-gray-50">
+      <td className="p-4">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => toggleSelect(product.id)}
+          className="w-5 h-5 cursor-pointer"
+        />
+      </td>
+      <td className="p-4 cursor-move" {...attributes} {...listeners}>
+        <span className="text-2xl">☰</span>
+      </td>
+      <td className="p-4 text-lg">{product.name}</td>
+      <td className="p-4 text-lg font-bold">{product.price.toLocaleString('ar-SY')} </td>
+      <td className="p-4">
+        <span className={`px-3 py-1 rounded text-white ${product.isActive ? 'bg-success' : 'bg-gray-400'}`}>
+          {product.isActive ? 'ظاهر' : 'مخفي'}
+        </span>
+      </td>
+      <td className="p-4">
+        <div className="flex gap-2">
+          <button
+            onClick={() => toggleProductVisibility(product.id, product.isActive)}
+            className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-2xl"
+            title={product.isActive ? 'إخفاء' : 'إظهار'}
+          >
+            {product.isActive ? '👁️' : '👁️🗨️'}
+          </button>
+          <button
+            onClick={() => deleteProduct(product.id)}
+            className="bg-error text-white px-4 py-2 rounded hover:opacity-90"
+          >
+            حذف
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
 }
 
 export default function AdminProductsPage() {
@@ -35,10 +108,10 @@ export default function AdminProductsPage() {
     try {
       const res = await fetch(`${API_URL}/admin/products`)
       const data = await res.json()
-      // تحويل is_active إلى isActive
       const products = data.map((p: any) => ({
         ...p,
-        isActive: p.is_active
+        isActive: p.is_active,
+        display_order: p.display_order || 0
       }))
       setProducts(products)
     } catch (error) {
@@ -80,7 +153,6 @@ export default function AdminProductsPage() {
         const sheet = workbook.Sheets[sheetName]
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
         
-        // تخطي السطر الأول (headers)
         for (let i = 1; i < rows.length; i++) {
           const [name, quantity, price] = rows[i]
           
@@ -191,6 +263,37 @@ export default function AdminProductsPage() {
     XLSX.writeFile(wb, 'نموذج_المنتجات.xlsx')
   }
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const oldIndex = products.findIndex((p) => p.id === active.id)
+      const newIndex = products.findIndex((p) => p.id === over.id)
+
+      const newProducts = arrayMove(products, oldIndex, newIndex)
+      setProducts(newProducts)
+
+      const orderedProducts = newProducts.map((p, index) => ({
+        id: p.id,
+        order: index
+      }))
+
+      try {
+        await api.updateProductsOrder(orderedProducts)
+      } catch (error) {
+        alert('فشل في حفظ الترتيب')
+        loadProducts()
+      }
+    }
+  }
+
   if (loading) {
     return <div className="p-8 text-center">جاري التحميل...</div>
   }
@@ -290,65 +393,50 @@ export default function AdminProductsPage() {
         )}
 
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-primary text-white">
-              <tr>
-                <th className="p-4 text-right">
-                  <input
-                    type="checkbox"
-                    checked={selectedProducts.length === products.length && products.length > 0}
-                    onChange={toggleSelectAll}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                </th>
-                <th className="p-4 text-right">المادة</th>
-                <th className="p-4 text-right">السعر</th>
-                <th className="p-4 text-right">الحالة</th>
-                <th className="p-4 text-right">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map(product => (
-                <tr key={product.id} className="border-b hover:bg-gray-50">
-                  <td className="p-4">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table className="w-full">
+              <thead className="bg-primary text-white">
+                <tr>
+                  <th className="p-4 text-right">
                     <input
                       type="checkbox"
-                      checked={selectedProducts.includes(product.id)}
-                      onChange={() => toggleSelect(product.id)}
+                      checked={selectedProducts.length === products.length && products.length > 0}
+                      onChange={toggleSelectAll}
                       className="w-5 h-5 cursor-pointer"
                     />
-                  </td>
-                  <td className="p-4 text-lg">{product.name}</td>
-                  <td className="p-4 text-lg font-bold">{product.price.toLocaleString('ar-SY')} ل.س</td>
-                  <td className="p-4">
-                    <span className={`px-3 py-1 rounded text-white ${product.isActive ? 'bg-success' : 'bg-gray-400'}`}>
-                      {product.isActive ? 'ظاهر' : 'مخفي'}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => toggleProductVisibility(product.id, product.isActive)}
-                        className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-2xl"
-                        title={product.isActive ? 'إخفاء' : 'إظهار'}
-                      >
-                        {product.isActive ? '👁️' : '👁️‍🗨️'}
-                      </button>
-                      <button
-                        onClick={() => deleteProduct(product.id)}
-                        className="bg-error text-white px-4 py-2 rounded hover:opacity-90"
-                      >
-                        حذف
-                      </button>
-                    </div>
-                  </td>
+                  </th>
+                  <th className="p-4 text-right">ترتيب</th>
+                  <th className="p-4 text-right">المادة</th>
+                  <th className="p-4 text-right">السعر</th>
+                  <th className="p-4 text-right">الحالة</th>
+                  <th className="p-4 text-right">إجراءات</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                <SortableContext
+                  items={products.map(p => p.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {products.map(product => (
+                    <SortableProduct
+                      key={product.id}
+                      product={product}
+                      toggleSelect={toggleSelect}
+                      isSelected={selectedProducts.includes(product.id)}
+                      toggleProductVisibility={toggleProductVisibility}
+                      deleteProduct={deleteProduct}
+                    />
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </DndContext>
         </div>
       </div>
     </div>
   )
 }
-

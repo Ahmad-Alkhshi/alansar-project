@@ -62,7 +62,7 @@ export function checkMarginAllowed(items: CartItem[]): MarginCheckResult {
   if (currentTotal > MAX_TOTAL) {
     return {
       allowed: false,
-      message: `تجاوزت الحد الأقصى المسموح (${MAX_TOTAL.toLocaleString('ar-SY')} ل.س)`,
+      message: `تجاوزت الحد الأقصى المسموح (${MAX_TOTAL.toLocaleString('ar-SY')} )`,
       currentTotal,
     }
   }
@@ -83,7 +83,7 @@ export function checkMarginAllowed(items: CartItem[]): MarginCheckResult {
   if (smallestItemPrice > difference) {
     return {
       allowed: true,
-      message: `تم استخدام الهامش الاستثنائي (+${difference.toLocaleString('ar-SY')} ل.س)`,
+      message: `تم استخدام الهامش الاستثنائي (+${difference.toLocaleString('ar-SY')} )`,
       currentTotal,
       smallestItemPrice,
       difference,
@@ -93,7 +93,7 @@ export function checkMarginAllowed(items: CartItem[]): MarginCheckResult {
   // يمكن حذف منتج والوصول لـ ≤500,000
   return {
     allowed: false,
-    message: `لقد تجاوزت الـ ${BASE_LIMIT.toLocaleString('ar-SY')} ل.س. يمكنك حذف منتج صغير للبقاء ضمن الحد المسموح.`,
+    message: `لقد تجاوزت الـ ${BASE_LIMIT.toLocaleString('ar-SY')} . يمكنك حذف منتج صغير للبقاء ضمن الحد المسموح.`,
     currentTotal,
     smallestItemPrice,
     difference,
@@ -127,5 +127,5 @@ export function canAddProduct(
  * رسالة توضيحية للمستخدم
  */
 export function getMarginExplanation(): string {
-  return `الحد الأساسي: ${BASE_LIMIT.toLocaleString('ar-SY')} ل.س\nيسمح بزيادة حتى ${MARGIN_LIMIT.toLocaleString('ar-SY')} ل.س فقط في حال عدم توفر خيارات أصغر`
+  return `الحد الأساسي: ${BASE_LIMIT.toLocaleString('ar-SY')} \nيسمح بزيادة حتى ${MARGIN_LIMIT.toLocaleString('ar-SY')}  فقط في حال عدم توفر خيارات أصغر`
 }

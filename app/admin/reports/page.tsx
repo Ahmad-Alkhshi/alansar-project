@@ -104,35 +104,34 @@ export default function ReportsPage() {
   }
 
   function exportIndividualToExcel() {
-    const allRecipients = recipients.map(recipient => {
+    const rows: any[] = []
+    
+    recipients.forEach(recipient => {
       const order = orders.find(o => o.recipients?.phone === recipient.phone)
       
       if (order) {
-        return {
-          'الاسم': order.recipients?.name,
-          'رقم الملف': order.recipients?.phone,
-          'المجموع': order.final_total,
-          'المنتجات': order.order_items?.map(i => 
-            `${i.products?.name} (${i.quantity})`
-          ).join(', ')
-        }
+        order.order_items?.forEach(item => {
+          rows.push({
+            'رقم الملف': order.recipients?.phone,
+            'المادة': item.products?.name,
+            'الكمية': item.quantity
+          })
+        })
       } else if (!recipient.order_submitted) {
         const basketValue = recipient.basket_limit || 500000
         const defaultBasket = defaultBaskets.find(b => b.basket_value === basketValue)
         
-        return {
-          'الاسم': recipient.name,
-          'رقم الملف': recipient.phone,
-          'المجموع': basketValue,
-          'المنتجات': defaultBasket?.items?.map((i: any) => 
-            `${i.products?.name} (${i.quantity})`
-          ).join(', ') || 'سلة افتراضية'
-        }
+        defaultBasket?.items?.forEach((item: any) => {
+          rows.push({
+            'رقم الملف': recipient.phone,
+            'المادة': item.products?.name,
+            'الكمية': item.quantity
+          })
+        })
       }
-      return null
-    }).filter(Boolean)
+    })
     
-    const ws = XLSX.utils.json_to_sheet(allRecipients)
+    const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'التقرير الفردي')
     XLSX.writeFile(wb, 'تقرير_فردي.xlsx')
@@ -201,7 +200,7 @@ export default function ReportsPage() {
           ${orders.map(order => `
             <div class="order">
               <h3>${order.recipients?.name} - ${order.recipients?.phone}</h3>
-              <p><strong>المجموع:</strong> ${order.final_total?.toLocaleString('ar-SY')} ل.س</p>
+              <p><strong>المجموع:</strong> ${order.final_total?.toLocaleString('ar-SY')} </p>
               <table>
                 <thead>
                   <tr>
@@ -215,7 +214,7 @@ export default function ReportsPage() {
                     <tr>
                       <td>${item.products?.name}</td>
                       <td>${item.quantity}</td>
-                      <td>${(item.quantity * item.unit_price).toLocaleString('ar-SY')} ل.س</td>
+                      <td>${(item.quantity * item.unit_price).toLocaleString('ar-SY')} </td>
                     </tr>
                   `).join('')}
                 </tbody>
@@ -335,7 +334,7 @@ export default function ReportsPage() {
                           <p className="text-gray-600">{order.recipients?.phone}</p>
                         </div>
                         <div className="text-2xl font-bold text-primary">
-                          {order.final_total?.toLocaleString('ar-SY')} ل.س
+                          {order.final_total?.toLocaleString('ar-SY')} 
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -361,7 +360,7 @@ export default function ReportsPage() {
                           <p className="text-sm text-warning font-bold mt-1">سلة افتراضية</p>
                         </div>
                         <div className="text-2xl font-bold text-primary">
-                          {basketValue.toLocaleString('ar-SY')} ل.س
+                          {basketValue.toLocaleString('ar-SY')} 
                         </div>
                       </div>
                       <div className="space-y-2">

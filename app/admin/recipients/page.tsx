@@ -282,7 +282,7 @@ export default function AdminRecipientsPage() {
               />
               <input
                 type="number"
-                placeholder="قيمة السلة (ل.س)"
+                placeholder="قيمة السلة ()"
                 value={formData.basketLimit}
                 onChange={e => setFormData({ ...formData, basketLimit: e.target.value })}
                 required
@@ -378,7 +378,7 @@ export default function AdminRecipientsPage() {
                   </td>
                   <td className="p-4">{recipient.name}</td>
                   <td className="p-4">{recipient.phone}</td>
-                  <td className="p-4 font-bold text-primary">{(recipient.basketLimit || 500000).toLocaleString('ar-SY')} ل.س</td>
+                  <td className="p-4 font-bold text-primary">{(recipient.basketLimit || 500000).toLocaleString('ar-SY')} </td>
                   <td className="p-4">
                     <input
                       type="number"

@@ -12,6 +12,8 @@ interface Product {
   imageUrl: string | null;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
 export default function ClaimPage() {
   const params = useParams();
   const token = params.token as string;
@@ -23,7 +25,6 @@ export default function ClaimPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [orderSubmitted, setOrderSubmitted] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
   const [existingOrder, setExistingOrder] = useState<any>(null);
   const [showRemovalPopup, setShowRemovalPopup] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export default function ClaimPage() {
           !cartData.recipient.order_submitted
         ) {
           setError(
-            "انتهت مدة ميزة اختيار المنتجات. ستستلم سلة غذائية افتراضية.",
+            "انتهت ميزة اختيار مواد السلة، يرجى انتظار رسالة لاستلام سلة جاهزة من الجمعية. ستستلم سلة غذائية جاهزة.",
           );
 
           // جلب السلة الافتراضية
@@ -89,7 +90,7 @@ export default function ClaimPage() {
               cartData.recipient.basketLimit ||
               500000;
             const defaultBasketRes = await fetch(
-              `http://localhost:5000/api/default-baskets/by-value/${basketValue}`,
+              `${API_URL}/default-baskets/by-value/${basketValue}`,
             );
             const defaultBasket = await defaultBasketRes.json();
 
@@ -249,20 +250,20 @@ export default function ClaimPage() {
 
       if (existingOrder) {
         await fetch(
-          `http://localhost:5000/api/recipients/reset-order/${token}`,
+          `${API_URL}/recipients/reset-order/${token}`,
           {
             method: "POST",
           },
         );
 
-        await fetch(`http://localhost:5000/api/orders/${existingOrder.id}`, {
+        await fetch(`${API_URL}/orders/${existingOrder.id}`, {
           method: "DELETE",
         });
 
         setExistingOrder(null);
       }
 
-      await fetch(`http://localhost:5000/api/cart/clear?token=${token}`, {
+      await fetch(`${API_URL}/cart/clear?token=${token}`, {
         method: "DELETE",
       });
 
@@ -289,13 +290,8 @@ export default function ClaimPage() {
 
       setOrderSubmitted(true);
       await loadData();
-
-      setSuccessMessage(
-        isEditMode
-          ? "تم تعديل الطلب بنجاح! سيتم مراجعته من قبل الإدارة."
-          : "تم تأكيد طلبك بنجاح! شكراً لك.",
-      );
     } catch (err) {
+      console.error('Submit error:', err);
       setError("فشل في تأكيد الطلب");
     } finally {
       setLoading(false);
@@ -445,122 +441,134 @@ export default function ClaimPage() {
       setOrderSubmitted(false);
     }
 
+    async function handleDeleteOrder() {
+      if (!confirm("هل أنت متأكد من حذف الطلب؟")) return;
+
+      try {
+        setLoading(true);
+        await fetch(`${API_URL}/recipients/reset-order/${token}`, {
+          method: "POST",
+        });
+        await fetch(`${API_URL}/orders/${existingOrder.id}`, {
+          method: "DELETE",
+        });
+        setExistingOrder(null);
+        setOrderSubmitted(false);
+        setLocalCart({});
+        // setSuccessMessage("تم حذف الطلب بنجاح");
+        await loadData();
+      } catch (err) {
+        setError("فشل في حذف الطلب");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     return (
-      <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            {existingOrder.id === "default" && (
-              <div className="bg-warning text-white p-4 rounded-lg mb-6 text-center">
-                <p className="text-xl font-bold">
-                  ⚠️ انتهت مدة ميزة الاختيار من السلة
-                </p>
-                <p className="mt-2">
-                  ستستلم سلة غذائية افتراضية بالمنتجات التالية:
-                </p>
-              </div>
-            )}
-
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-2xl font-bold mb-2">{recipientName}</h3>
-                <p className="text-gray-600">
-                  {existingOrder.recipients?.phone ||
-                    existingOrder.recipient?.phone}
-                </p>
-                {existingOrder.id !== "default" && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    {new Date(
-                      existingOrder.created_at || existingOrder.createdAt,
-                    ).toLocaleString("ar-SY")}
+      <div className="min-h-screen bg-gray-50 flex flex-col" dir="rtl">
+        <div className="flex-1 overflow-y-auto p-8 pb-64">
+          <div className="max-w-7xl mx-auto">
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              {existingOrder.id === "default" && (
+                <div className="bg-warning text-white p-4 rounded-lg mb-6 text-center">
+                  <p className="text-xl font-bold">
+                    ⚠️ انتهت ميزة اختيار مواد السلة
                   </p>
-                )}
-                {canEdit && (
-                  <p className="text-sm text-warning mt-2 font-bold">
-                    يمكنك التعديل خلال {editDeadlineDays - daysPassed} يوم
+                  <p className="mt-2">
+                     يرجى انتظار رسالة لاستلام سلة جاهزة من الجمعية
                   </p>
-                )}
-              </div>
-              <div className="text-left">
-                <div className="text-3xl font-bold text-primary mb-2">
-                  {(
-                    existingOrder.final_total ||
-                    existingOrder.finalTotal ||
-                    0
-                  ).toLocaleString("en-US")}{" "}
-                  ل.س
                 </div>
-                <span className="px-4 py-2 rounded text-white bg-gray-400">
-                  قيد التحضير
-                </span>
-              </div>
-            </div>
+              )}
 
-            <div className="border-t pt-4">
-              <h4 className="font-bold mb-3">المنتجات:</h4>
-              <div className="space-y-2">
-                {(existingOrder.order_items || existingOrder.items || []).map(
-                  (item: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center bg-gray-50 p-3 rounded"
-                    >
-                      <span className="font-medium">
-                        {item.products?.name || item.product?.name || "منتج"}
-                      </span>
-                      <div className="flex gap-4 items-center">
-                        <span className="text-gray-600">
-                          الكمية: {item.quantity}
-                        </span>
-                        <span className="text-gray-600">
-                          {(item.unit_price || item.unitPrice).toLocaleString(
-                            "en-US",
-                          )}{" "}
-                          ل.س
-                        </span>
-                        <span className="font-bold text-primary">
-                          {(
-                            item.quantity * (item.unit_price || item.unitPrice)
-                          ).toLocaleString("en-US")}{" "}
-                          ل.س
-                        </span>
-                      </div>
+                  {!canEdit && existingOrder.id !== "default" && (
+                    <div className="mt-6 border-t pt-4">
+                      {!linkStatus.active ? (
+                        <div className="bg-warning text-white p-4 rounded-lg text-center">
+                          <p className="text-xl font-bold">
+                            ⚠️ انتهت ميزة تعديل مواد السلة
+                          </p>
+                          <p className="mt-2">
+                            يرجى انتظار رسالة لاستلام السلة من الجمعية
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-center text-gray-600 font-bold">
+                            لا يمكن التعديل حالياً.
+                          </p>
+                          <p className="text-sm text-gray-500 text-center mt-2">
+                            {linkStatus.expired && "انتهت مهلة التعديل."}
+                            {!linkStatus.expired &&
+                              existingOrder.can_edit === false &&
+                              "الطلب قيد المراجعة."}
+                          </p>
+                        </>
+                      )}
                     </div>
-                  ),
-                )}
+                  )}
+              <div className="mb-4 text-center">
+                <h3 className="text-2xl font-bold mb-4">{recipientName}</h3>
+                <div>
+                  <div className="text-sm text-gray-600 mb-1">قيمة السلة</div>
+                  <div className="text-3xl font-bold text-primary">
+                    {baseLimit.toLocaleString("en-US")}
+                  </div>
+                </div>
               </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-bold mb-3">المنتجات:</h4>
+                <div className="space-y-2">
+                  {(existingOrder.order_items || existingOrder.items || []).map(
+                    (item: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="bg-gray-50 p-3 rounded"
+                      >
+                        <div className="font-medium mb-2">
+                          {item.products?.name || item.product?.name || "منتج"}
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">
+                            الكمية: {item.quantity}
+                          </span>
+                          <span className="font-bold text-primary">
+                            {(
+                              item.quantity * (item.unit_price || item.unitPrice)
+                            ).toLocaleString("en-US")}
+                          </span>
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+
             </div>
-
-            {canEdit && (
-              <div className="mt-6 border-t pt-4">
-                <button
-                  onClick={handleEdit}
-                  className="w-full bg-warning text-white py-4 rounded-lg hover:opacity-90 font-bold text-xl"
-                >
-                  تعديل الطلب
-                </button>
-                <p className="text-sm text-gray-500 text-center mt-2">
-                  يمكنك التعديل خلال {editDeadlineDays - daysPassed} يوم
-                </p>
-              </div>
-            )}
-
-            {!canEdit && existingOrder.id !== "default" && (
-              <div className="mt-6 border-t pt-4">
-                <p className="text-center text-gray-600 font-bold">
-                  لا يمكن التعديل حالياً.
-                </p>
-                <p className="text-sm text-gray-500 text-center mt-2">
-                  {!linkStatus.active && "تم إلغاء الرابط من قبل الإدارة."}
-                  {linkStatus.expired && "انتهت مهلة التعديل."}
-                  {!linkStatus.active &&
-                    !linkStatus.expired &&
-                    existingOrder.can_edit === false &&
-                    "الطلب قيد المراجعة."}
-                </p>
-              </div>
-            )}
           </div>
         </div>
+
+        {canEdit && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-primary p-4 shadow-lg">
+            <div className="max-w-7xl mx-auto space-y-3">
+              <button
+                onClick={handleEdit}
+                className="w-full bg-warning text-white py-4 rounded-lg hover:opacity-90 font-bold text-xl"
+              >
+                تعديل الطلب
+              </button>
+              <button
+                onClick={handleDeleteOrder}
+                className="w-full bg-error text-white py-4 rounded-lg hover:opacity-90 font-bold text-xl"
+              >
+                حذف الطلب
+              </button>
+              <p className="text-sm text-center text-warning mt-2 font-bold">
+                   يرجى انتظار رسالة من الجميعة لاستلام السلة 
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -569,31 +577,31 @@ export default function ClaimPage() {
     <div className="min-h-screen bg-gray-50" dir="rtl">
       <div className="bg-primary text-white py-6 px-4 shadow-lg">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold mb-2">مرحباً {recipientName}</h1>
-          <p className="text-xl">اختر المواد الغذائية التي تحتاجها</p>
+          <h1 className="text-base mb-2">يرجى من السيدة <span className="font-bold text-lg">{recipientName}</span> اختيار المواد الغذائية التي تحتاجها اسرتها</h1>
+          {/* <p className="text-xl">يرجى اختيار السلة الغذائية التي تحتاجها الأسرة</p> */}
         </div>
       </div>
 
-      <div className="bg-white border-b-4 border-primary-light py-6 px-4 sticky top-0 z-10 shadow">
-        <div className="max-w-7xl mx-auto">
-          {!canSubmitOrder && (
+      {!canSubmitOrder && (
+        <div className="bg-white border-b-4 border-primary-light py-6 px-4 sticky top-0 z-10 shadow">
+          <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-4">
               <div>
                 <div className="text-lg text-gray-600 mb-1">المجموع الحالي</div>
                 <div className="text-4xl font-bold text-primary">
-                  {cartTotal.toLocaleString("en-US")} ل.س
+                  {cartTotal.toLocaleString("en-US")} 
                 </div>
               </div>
               <div>
                 <div className="text-lg text-gray-600 mb-1">المتبقي</div>
                 <div className="text-4xl font-bold text-success">
-                  {Math.max(0, baseLimit - cartTotal).toLocaleString("en-US")} ل.س
+                  {Math.max(0, baseLimit - cartTotal).toLocaleString("en-US")} 
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <div className="max-w-7xl mx-auto px-4 mt-4">
@@ -616,7 +624,7 @@ export default function ClaimPage() {
           {products.map((product) => {
             const quantity = getCartQuantity(product.id);
             const checkResult = canAddProduct(product.price);
-            const isDisabled = !checkResult.allowed;
+            const isDisabled = !checkResult.allowed || canSubmitOrder;
 
             return (
               <div
@@ -626,7 +634,7 @@ export default function ClaimPage() {
                 <h3 className="text-xl font-bold mb-3">{product.name}</h3>
                 <div className="flex items-center justify-between">
                   <div className="text-2xl font-bold text-primary">
-                    {product.price.toLocaleString("en-US")} ل.س
+                    {product.price.toLocaleString("en-US")} 
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -657,7 +665,7 @@ export default function ClaimPage() {
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-primary p-4 shadow-lg">
             <div className="max-w-7xl mx-auto">
               <button
-                onClick={() => setShowSummary(true)}
+                onClick={submitOrder}
                 disabled={!canSubmitOrder}
                 className={`w-full text-2xl font-bold py-4 rounded-lg ${
                   canSubmitOrder
@@ -666,69 +674,11 @@ export default function ClaimPage() {
                 }`}
               >
                 {canSubmitOrder
-                  ? `اعتماد الطلب (${cartItemsCount} منتج - بقيمة ${baseLimit.toLocaleString("en-US")} ل.س)`
+                  ? `اعتماد الطلب (${cartItemsCount} منتج - بقيمة ${baseLimit.toLocaleString("en-US")} )`
                   : cartTotal < baseLimit
-                    ? `لازم تكمل للحد المطلوب (${baseLimit.toLocaleString("en-US")} ل.س)`
+                    ? `لازم تكمل للحد المطلوب (${baseLimit.toLocaleString("en-US")} )`
                     : "لا يمكن رفع الطلب - تجاوز الحد المسموح"}
               </button>
-            </div>
-          </div>
-        )}
-
-        {showSummary && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col">
-              <h2 className="text-3xl font-bold p-6 pb-4 text-center">
-                ملخص الطلب
-              </h2>
-
-              <div className="space-y-3 px-6 overflow-y-auto flex-1">
-                {Object.entries(localCart).map(([productId, quantity]) => {
-                  const product = products.find((p) => p.id === productId);
-                  if (!product) return null;
-                  return (
-                    <div
-                      key={productId}
-                      className="flex justify-between items-center bg-gray-50 p-4 rounded-lg"
-                    >
-                      <div>
-                        <div className="font-bold text-lg">{product.name}</div>
-                        <div className="text-gray-600">الكمية: {quantity}</div>
-                      </div>
-                      <div className="text-xl font-bold text-primary">
-                        {(product.price * quantity).toLocaleString("en-US")} ل.س
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="border-t-2 pt-4 px-6">
-                <div className="flex justify-between items-center text-2xl font-bold mb-4">
-                  <span>المجموع الكلي:</span>
-                  <span className="text-primary">
-                    {baseLimit.toLocaleString("en-US")} ل.س
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-3 p-6 pt-0">
-                <button
-                  onClick={() => setShowSummary(false)}
-                  className="flex-1 bg-gray-400 text-white text-xl font-bold py-4 rounded-lg hover:opacity-90"
-                >
-                  تعديل
-                </button>
-                <button
-                  onClick={() => {
-                    setShowSummary(false);
-                    submitOrder();
-                  }}
-                  className="flex-1 bg-success text-white text-xl font-bold py-4 rounded-lg hover:opacity-90"
-                >
-                  تأكيد الطلب
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -759,7 +709,7 @@ export default function ClaimPage() {
                         الكمية: {item.quantity}
                       </div>
                       <div className="text-primary font-bold">
-                        {item.price.toLocaleString("en-US")} ل.س
+                        {item.price.toLocaleString("en-US")} 
                       </div>
                     </div>
                     <button

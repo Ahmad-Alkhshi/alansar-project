@@ -87,6 +87,15 @@ export const api = {
     return res.json();
   },
 
+  updateProductsOrder: async (products: Array<{id: string, order: number}>) => {
+    const res = await fetch(`${API_URL}/admin/products/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ products }),
+    });
+    return res.json();
+  },
+
   // Edit Requests
   requestEdit: async (token: string, reason: string) => {
     const res = await fetch(`${API_URL}/orders/request-edit`, {

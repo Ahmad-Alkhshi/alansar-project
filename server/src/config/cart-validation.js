@@ -55,7 +55,7 @@ export function validateCartAddition(cartItems, productToAdd, recipientBasketLim
   if (newTotal > maxLimit) {
     return {
       allowed: false,
-      reason: `تجاوز الحد الأقصى المسموح (${maxLimit.toLocaleString('ar-SY')} ل.س)`
+      reason: `تجاوز الحد الأقصى المسموح (${maxLimit.toLocaleString('ar-SY')} )`
     };
   }
   
@@ -108,7 +108,7 @@ export function validateOrderSubmission(cartItems, recipientBasketLimit = BASE_L
   if (total < recipientBasketLimit) {
     return {
       allowed: false,
-      reason: `يجب إكمال المشتريات للوصول إلى ${recipientBasketLimit.toLocaleString('ar-SY')} ل.س`
+      reason: `يجب إكمال المشتريات للوصول إلى ${recipientBasketLimit.toLocaleString('ar-SY')} `
     };
   }
   
@@ -119,7 +119,7 @@ export function validateOrderSubmission(cartItems, recipientBasketLimit = BASE_L
   if (total > maxLimit) {
     return {
       allowed: false,
-      reason: `تجاوز الحد الأقصى المسموح (${maxLimit.toLocaleString('ar-SY')} ل.س)`
+      reason: `تجاوز الحد الأقصى المسموح (${maxLimit.toLocaleString('ar-SY')} )`
     };
   }
   
