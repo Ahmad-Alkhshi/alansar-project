@@ -285,11 +285,6 @@ export default function ClaimPage() {
 
       if (isEditMode) {
         await api.requestEdit(token, "تعديل الطلب");
-
-        // تعيين can_edit = false بعد التعديل
-        await fetch(`http://localhost:5000/api/orders/disable-edit/${token}`, {
-          method: "POST",
-        });
       }
 
       setOrderSubmitted(true);
@@ -423,11 +418,10 @@ export default function ClaimPage() {
     );
     const editDeadlineDays = 2;
 
-    // يقدر يعدل فقط إذا: الرابط مفعّل + ما انتهت المدة + can_edit = true
+    // يقدر يعدل فقط إذا: الرابط مفعّل + ما انتهت المدة
     const canEdit =
       linkStatus.active &&
       !linkStatus.expired &&
-      existingOrder.can_edit !== false &&
       daysPassed < editDeadlineDays;
 
     console.log(

@@ -299,12 +299,46 @@ export default function AdminRecipientsPage() {
         {selectedRecipients.length > 0 && (
           <div className="bg-primary-light p-4 rounded-lg mb-4 flex items-center justify-between">
             <span className="text-lg font-bold">تم تحديد {selectedRecipients.length} مستفيد</span>
-            <button
-              onClick={bulkDelete}
-              className="bg-error text-white px-4 py-2 rounded-lg hover:opacity-90"
-            >
-              حذف الكل
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  for (const id of selectedRecipients) {
+                    await fetch(`http://localhost:5000/api/recipients/${id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ linkActive: true })
+                    })
+                  }
+                  setSelectedRecipients([])
+                  loadRecipients()
+                }}
+                className="bg-success text-white px-4 py-2 rounded-lg hover:opacity-90"
+              >
+                تفعيل الروابط
+              </button>
+              <button
+                onClick={async () => {
+                  for (const id of selectedRecipients) {
+                    await fetch(`http://localhost:5000/api/recipients/${id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ linkActive: false })
+                    })
+                  }
+                  setSelectedRecipients([])
+                  loadRecipients()
+                }}
+                className="bg-warning text-white px-4 py-2 rounded-lg hover:opacity-90"
+              >
+                إلغاء الروابط
+              </button>
+              <button
+                onClick={bulkDelete}
+                className="bg-error text-white px-4 py-2 rounded-lg hover:opacity-90"
+              >
+                حذف الكل
+              </button>
+            </div>
           </div>
         )}
 
