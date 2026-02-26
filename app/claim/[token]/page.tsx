@@ -486,7 +486,7 @@ export default function ClaimPage() {
                     existingOrder.final_total ||
                     existingOrder.finalTotal ||
                     0
-                  ).toLocaleString("ar-SY")}{" "}
+                  ).toLocaleString("en-US")}{" "}
                   ل.س
                 </div>
                 <span className="px-4 py-2 rounded text-white bg-gray-400">
@@ -513,14 +513,14 @@ export default function ClaimPage() {
                         </span>
                         <span className="text-gray-600">
                           {(item.unit_price || item.unitPrice).toLocaleString(
-                            "ar-SY",
+                            "en-US",
                           )}{" "}
                           ل.س
                         </span>
                         <span className="font-bold text-primary">
                           {(
                             item.quantity * (item.unit_price || item.unitPrice)
-                          ).toLocaleString("ar-SY")}{" "}
+                          ).toLocaleString("en-US")}{" "}
                           ل.س
                         </span>
                       </div>
@@ -580,13 +580,13 @@ export default function ClaimPage() {
             <div>
               <div className="text-lg text-gray-600 mb-1">المجموع الحالي</div>
               <div className="text-4xl font-bold text-primary">
-                {Math.min(cartTotal, baseLimit).toLocaleString("ar-SY")} ل.س
+                {cartTotal.toLocaleString("en-US")} ل.س
               </div>
             </div>
             <div>
               <div className="text-lg text-gray-600 mb-1">المتبقي</div>
               <div className="text-4xl font-bold text-success">
-                {Math.max(0, baseLimit - cartTotal).toLocaleString("ar-SY")} ل.س
+                {Math.max(0, baseLimit - cartTotal).toLocaleString("en-US")} ل.س
               </div>
             </div>
           </div>
@@ -624,7 +624,7 @@ export default function ClaimPage() {
                 <div className="flex-1">
                   <h3 className="text-xl font-bold mb-1">{product.name}</h3>
                   <div className="text-2xl font-bold text-primary">
-                    {product.price.toLocaleString("ar-SY")} ل.س
+                    {product.price.toLocaleString("en-US")} ل.س
                   </div>
                 </div>
 
@@ -665,9 +665,9 @@ export default function ClaimPage() {
                 }`}
               >
                 {canSubmitOrder
-                  ? `اعتماد الطلب (${cartItemsCount} منتج - بقيمة ${cartTotal.toLocaleString("ar-SY")} ل.س)`
+                  ? `اعتماد الطلب (${cartItemsCount} منتج - بقيمة ${baseLimit.toLocaleString("en-US")} ل.س)`
                   : cartTotal < baseLimit
-                    ? `لازم تكمل للحد المطلوب (${baseLimit.toLocaleString("ar-SY")} ل.س)`
+                    ? `لازم تكمل للحد المطلوب (${baseLimit.toLocaleString("en-US")} ل.س)`
                     : "لا يمكن رفع الطلب - تجاوز الحد المسموح"}
               </button>
             </div>
@@ -676,12 +676,12 @@ export default function ClaimPage() {
 
         {showSummary && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <h2 className="text-3xl font-bold mb-6 text-center">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] flex flex-col">
+              <h2 className="text-3xl font-bold p-6 pb-4 text-center">
                 ملخص الطلب
               </h2>
 
-              <div className="space-y-3 mb-6">
+              <div className="space-y-3 px-6 overflow-y-auto flex-1">
                 {Object.entries(localCart).map(([productId, quantity]) => {
                   const product = products.find((p) => p.id === productId);
                   if (!product) return null;
@@ -695,23 +695,23 @@ export default function ClaimPage() {
                         <div className="text-gray-600">الكمية: {quantity}</div>
                       </div>
                       <div className="text-xl font-bold text-primary">
-                        {(product.price * quantity).toLocaleString("ar-SY")} ل.س
+                        {(product.price * quantity).toLocaleString("en-US")} ل.س
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="border-t-2 pt-4 mb-6">
-                <div className="flex justify-between items-center text-2xl font-bold">
+              <div className="border-t-2 pt-4 px-6">
+                <div className="flex justify-between items-center text-2xl font-bold mb-4">
                   <span>المجموع الكلي:</span>
                   <span className="text-primary">
-                    {cartTotal.toLocaleString("ar-SY")} ل.س
+                    {cartTotal.toLocaleString("en-US")} ل.س
                   </span>
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 p-6 pt-0">
                 <button
                   onClick={() => setShowSummary(false)}
                   className="flex-1 bg-gray-400 text-white text-xl font-bold py-4 rounded-lg hover:opacity-90"
@@ -758,7 +758,7 @@ export default function ClaimPage() {
                         الكمية: {item.quantity}
                       </div>
                       <div className="text-primary font-bold">
-                        {item.price.toLocaleString("ar-SY")} ل.س
+                        {item.price.toLocaleString("en-US")} ل.س
                       </div>
                     </div>
                     <button
