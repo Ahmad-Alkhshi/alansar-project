@@ -67,16 +67,27 @@ router.post('/bulk-delete', async (req, res) => {
   try {
     const { ids } = req.body;
     
-    console.log('Bulk delete request:', ids);
+    console.log('Bulk delete request:', ids.length, 'recipients');
     
-    // حذف الطلبات المرتبطة
-    for (const id of ids) {
-      await supabase.from('orders').delete().eq('recipient_id', id);
-    }
+    const batchSize = 50;
+    let deleted = 0;
     
-    // حذف المستفيدين
-    for (const id of ids) {
-      await supabase.from('recipients').delete().eq('id', id);
+    // تقسيم لدفعات
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batch = ids.slice(i, i + batchSize);
+      
+      // حذف الطلبات
+      for (const id of batch) {
+        await supabase.from('orders').delete().eq('recipient_id', id);
+      }
+      
+      // حذف المستفيدين
+      for (const id of batch) {
+        await supabase.from('recipients').delete().eq('id', id);
+      }
+      
+      deleted += batch.length;
+      console.log(`Deleted ${deleted}/${ids.length}`);
     }
     
     res.json({ message: `تم حذف ${ids.length} مستفيد` });

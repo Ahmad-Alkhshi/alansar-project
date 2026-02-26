@@ -98,13 +98,23 @@ export const bulkDeleteProducts = async (req, res) => {
   try {
     const { ids } = req.body;
 
-    console.log('Bulk delete products:', ids);
+    console.log('Bulk delete products:', ids.length, 'products');
 
-    // حذف واحد واحد
-    for (const id of ids) {
-      await supabase.from('order_items').delete().eq('product_id', id);
-      await supabase.from('cart_items').delete().eq('product_id', id);
-      await supabase.from('products').delete().eq('id', id);
+    const batchSize = 50;
+    let deleted = 0;
+
+    // تقسيم لدفعات
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batch = ids.slice(i, i + batchSize);
+      
+      for (const id of batch) {
+        await supabase.from('order_items').delete().eq('product_id', id);
+        await supabase.from('cart_items').delete().eq('product_id', id);
+        await supabase.from('products').delete().eq('id', id);
+      }
+      
+      deleted += batch.length;
+      console.log(`Deleted ${deleted}/${ids.length}`);
     }
 
     res.json({ message: `تم حذف ${ids.length} منتج` });
