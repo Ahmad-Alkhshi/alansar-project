@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { validateOrderSubmission } from '../config/cart-validation.js';
 
 export const submitOrder = async (req, res) => {
   try {
@@ -32,6 +33,27 @@ export const submitOrder = async (req, res) => {
       return res.status(400).json({ error: 'السلة فارغة' });
     }
 
+    // التحقق من صحة الطلب في السيرفر
+    const cartItemsForValidation = cart.cart_items.map(item => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      totalPrice: item.quantity * item.unit_price,
+      products: item.products
+    }));
+
+    const validation = validateOrderSubmission(
+      cartItemsForValidation,
+      recipient.basket_limit || 500000
+    );
+
+    if (!validation.allowed) {
+      return res.status(400).json({ 
+        error: validation.reason,
+        removableItems: validation.removableItems
+      });
+    }
+
     // التحقق من المخزون
     for (const item of cart.cart_items) {
       if (item.quantity > item.products.stock) {
@@ -41,12 +63,15 @@ export const submitOrder = async (req, res) => {
       }
     }
 
+    // حساب المجموع الكلي
+    const finalTotal = cart.cart_items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+
     // إنشاء الطلب
     const { data: order } = await supabase
       .from('orders')
       .insert([{
         recipient_id: recipient.id,
-        final_total: cart.total,
+        final_total: finalTotal,
         status: 'pending',
       }])
       .select()

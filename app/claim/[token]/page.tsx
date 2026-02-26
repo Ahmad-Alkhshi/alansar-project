@@ -25,6 +25,9 @@ export default function ClaimPage() {
   const [orderSubmitted, setOrderSubmitted] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [existingOrder, setExistingOrder] = useState<any>(null)
+  const [showRemovalPopup, setShowRemovalPopup] = useState(false)
+  const [pendingProduct, setPendingProduct] = useState<string | null>(null)
+  const [removableProducts, setRemovableProducts] = useState<any[]>([])
 
   useEffect(() => {
     loadData()
@@ -46,6 +49,7 @@ export default function ClaimPage() {
       
       setRecipientName(cartData.recipient.name)
       setOrderSubmitted(cartData.recipient.orderSubmitted)
+      setBaseLimit(cartData.recipient.basket_limit || cartData.recipient.basketLimit || 500000)
       
       // إذا كان مسجل مسبقاً، جلب الطلب
       if (cartData.recipient.orderSubmitted) {
@@ -67,6 +71,26 @@ export default function ClaimPage() {
   }
 
   function addToCart(productId: string) {
+    setError('')
+    
+    const product = products.find(p => p.id === productId)
+    if (!product) return
+    
+    const checkResult = canAddProduct(product.price)
+    
+    if (!checkResult.allowed) {
+      return // الزر معطل أصلاً
+    }
+    
+    if (checkResult.needsRemoval && checkResult.removableItems.length > 0) {
+      // إظهار القائمة المنبثقة
+      setPendingProduct(productId)
+      setRemovableProducts(checkResult.removableItems)
+      setShowRemovalPopup(true)
+      return
+    }
+    
+    // إضافة عادية
     setLocalCart(prev => ({
       ...prev,
       [productId]: (prev[productId] || 0) + 1
@@ -74,6 +98,7 @@ export default function ClaimPage() {
   }
 
   function removeFromCart(productId: string) {
+    setError('')
     setLocalCart(prev => {
       const newCart = {...prev}
       if (newCart[productId] > 1) {
@@ -85,26 +110,60 @@ export default function ClaimPage() {
     })
   }
 
+  function handleRemoveAndAdd(removeId: string) {
+    // حذف المنتج القديم
+    removeFromCart(removeId)
+    
+    // إضافة المنتج الجديد
+    if (pendingProduct) {
+      setLocalCart(prev => ({
+        ...prev,
+        [pendingProduct]: (prev[pendingProduct] || 0) + 1
+      }))
+    }
+    
+    // إغلاق القائمة
+    setShowRemovalPopup(false)
+    setPendingProduct(null)
+    setRemovableProducts([])
+  }
+
   async function submitOrder() {
     try {
       setError('')
       setLoading(true)
       
       for (const [productId, quantity] of Object.entries(localCart)) {
-        await api.addToCart(token, productId, quantity)
+        const res = await api.addToCart(token, productId, quantity)
+        if (res.error) {
+          setError(res.error)
+          if (res.removableItems) {
+            const itemsList = res.removableItems.map((item: any) => 
+              `${item.name} (${item.price.toLocaleString('ar-SY')} ل.س)`
+            ).join('\n')
+            setError(`${res.error}:\n${itemsList}`)
+          }
+          setLoading(false)
+          return
+        }
       }
       
       const data = await api.submitOrder(token)
       
       if (data.error) {
         setError(data.error)
+        if (data.removableItems) {
+          const itemsList = data.removableItems.map((item: any) => 
+            `${item.name} (${item.price.toLocaleString('ar-SY')} ل.س)`
+          ).join('\n')
+          setError(`${data.error}:\n${itemsList}`)
+        }
         setLoading(false)
         return
       }
       
       setOrderSubmitted(true)
       
-      // جلب الطلب اللي تم إنشاؤه
       const ordersData = await api.getAllOrders()
       const cartData = await api.getCart(token)
       const userOrder = ordersData.find((o: any) => {
@@ -121,6 +180,49 @@ export default function ClaimPage() {
     }
   }
 
+  function canAddProduct(productPrice: number): { allowed: boolean; needsRemoval: boolean; removableItems: any[] } {
+    const newTotal = cartTotal + productPrice
+    
+    // إذا ضمن الحد الأساسي
+    if (newTotal <= baseLimit) {
+      return { allowed: true, needsRemoval: false, removableItems: [] }
+    }
+    
+    // إذا تجاوز السقف الأقصى
+    if (newTotal > maxLimit) {
+      return { allowed: false, needsRemoval: false, removableItems: [] }
+    }
+    
+    // ضمن نطاق الهامش - نتحقق من الشرط
+    const extra = newTotal - baseLimit
+    
+    // حساب أصغر منتج في السلة بعد الإضافة
+    const cartPrices = Object.entries(localCart)
+      .map(([id, qty]) => {
+        const p = products.find(pr => pr.id === id)
+        return p ? p.price : 0
+      })
+      .filter(price => price > 0)
+    
+    cartPrices.push(productPrice)
+    const smallestPrice = Math.min(...cartPrices)
+    
+    // شرط الهامش: أصغر منتج > الفرق
+    if (smallestPrice > extra) {
+      return { allowed: true, needsRemoval: false, removableItems: [] }
+    }
+    
+    // الشرط غير محقق - نحتاج حذف منتجات
+    const itemsToRemove = Object.entries(localCart)
+      .map(([id, qty]) => {
+        const p = products.find(pr => pr.id === id)
+        return p ? { id: p.id, name: p.name, price: p.price, quantity: qty } : null
+      })
+      .filter(item => item && item.price <= extra) // المنتجات اللي سعرها <= الفرق
+    
+    return { allowed: true, needsRemoval: true, removableItems: itemsToRemove }
+  }
+
   function getCartQuantity(productId: string): number {
     return localCart[productId] || 0
   }
@@ -131,8 +233,9 @@ export default function ClaimPage() {
   }, 0)
   
   const cartItemsCount = Object.values(localCart).reduce((sum, qty) => sum + qty, 0)
-  const baseLimit = 500000
+  const [baseLimit, setBaseLimit] = useState(500000)
   const exceptionalMargin = 10000
+  const maxLimit = baseLimit + exceptionalMargin
   const remaining = baseLimit - cartTotal
   const difference = cartTotal - baseLimit
   
@@ -144,6 +247,9 @@ export default function ClaimPage() {
   // التحقق من الهامش
   const isMarginAllowed = cartTotal <= baseLimit || 
     (difference <= exceptionalMargin && smallestItemPrice > difference)
+  
+  // التحقق من إمكانية رفع الطلب: لازم يكون وصل للحد أو تجاوزه بشكل صحيح
+  const canSubmitOrder = cartTotal >= baseLimit && isMarginAllowed
 
   if (loading) {
     return (
@@ -176,7 +282,7 @@ export default function ClaimPage() {
               </div>
               <div className="text-left">
                 <div className="text-3xl font-bold text-primary mb-2">
-                  {(existingOrder.final_total || existingOrder.finalTotal).toLocaleString('ar-SY')} ل.س
+                  {((existingOrder.final_total || existingOrder.finalTotal) || 0).toLocaleString('ar-SY')} ل.س
                 </div>
                 <span className="px-4 py-2 rounded text-white bg-gray-400">
                   قيد التحضير
@@ -240,12 +346,6 @@ export default function ClaimPage() {
               تم استخدام الهامش الاستثنائي (+{(cartTotal - baseLimit).toLocaleString('ar-SY')} ل.س)
             </div>
           )}
-          
-          {!isMarginAllowed && cartTotal > baseLimit && (
-            <div className="bg-error text-white p-4 rounded-lg text-lg mt-2">
-              تجاوز الحد المسموح! أصغر منتج ({smallestItemPrice.toLocaleString('ar-SY')}) أقل من الفارق ({(cartTotal - baseLimit).toLocaleString('ar-SY')})
-            </div>
-          )}
         </div>
       </div>
 
@@ -269,6 +369,9 @@ export default function ClaimPage() {
         <div className="space-y-3">
           {products.map(product => {
             const quantity = getCartQuantity(product.id)
+            const checkResult = canAddProduct(product.price)
+            const isDisabled = !checkResult.allowed
+            
             return (
               <div key={product.id} className="bg-white rounded-lg shadow p-4 flex items-center justify-between gap-3">
                 <div className="flex-1">
@@ -291,7 +394,8 @@ export default function ClaimPage() {
                   </div>
                   <button
                     onClick={() => addToCart(product.id)}
-                    className="bg-success text-white text-2xl font-bold w-12 h-12 rounded-lg hover:opacity-90"
+                    disabled={isDisabled}
+                    className="bg-success text-white text-2xl font-bold w-12 h-12 rounded-lg hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     +
                   </button>
@@ -301,27 +405,24 @@ export default function ClaimPage() {
           })}
         </div>
 
-        {cartItemsCount > 0 && isMarginAllowed && (
+        {cartItemsCount > 0 && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-primary p-4 shadow-lg">
             <div className="max-w-7xl mx-auto">
               <button
                 onClick={() => setShowSummary(true)}
-                className="w-full bg-success text-white text-2xl font-bold py-4 rounded-lg hover:opacity-90"
+                disabled={!canSubmitOrder}
+                className={`w-full text-2xl font-bold py-4 rounded-lg ${
+                  canSubmitOrder 
+                    ? 'bg-success text-white hover:opacity-90' 
+                    : 'bg-gray-400 text-white opacity-50 cursor-not-allowed'
+                }`}
               >
-                رفع الطلب ({cartItemsCount} منتج - {cartTotal.toLocaleString('ar-SY')} ل.س)
-              </button>
-            </div>
-          </div>
-        )}
-        
-        {cartItemsCount > 0 && !isMarginAllowed && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-error p-4 shadow-lg">
-            <div className="max-w-7xl mx-auto">
-              <button
-                disabled
-                className="w-full bg-gray-400 text-white text-2xl font-bold py-4 rounded-lg opacity-50 cursor-not-allowed"
-              >
-                لا يمكن رفع الطلب - تجاوز الحد المسموح
+                {canSubmitOrder 
+                  ? `رفع الطلب (${cartItemsCount} منتج - ${cartTotal.toLocaleString('ar-SY')} ل.س)`
+                  : cartTotal < baseLimit
+                    ? `لازم تكمل للحد المطلوب (${baseLimit.toLocaleString('ar-SY')} ل.س)`
+                    : 'لا يمكن رفع الطلب - تجاوز الحد المسموح'
+                }
               </button>
             </div>
           </div>
@@ -374,6 +475,46 @@ export default function ClaimPage() {
                   تأكيد الطلب
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {showRemovalPopup && pendingProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] flex flex-col">
+              <h2 className="text-2xl font-bold mb-4 text-center text-error">يجب حذف منتج للمتابعة</h2>
+              <p className="text-lg mb-6 text-center text-gray-700">
+                لإضافة <span className="font-bold text-primary">{products.find(p => p.id === pendingProduct)?.name}</span>، يجب حذف أحد المنتجات التالية:
+              </p>
+              
+              <div className="space-y-3 mb-6 overflow-y-auto flex-1">
+                {removableProducts.map((item: any) => (
+                  <div key={item.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+                    <div>
+                      <div className="font-bold text-lg">{item.name}</div>
+                      <div className="text-gray-600">الكمية: {item.quantity}</div>
+                      <div className="text-primary font-bold">{item.price.toLocaleString('ar-SY')} ل.س</div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveAndAdd(item.id)}
+                      className="bg-error text-white px-6 py-3 rounded-lg hover:opacity-90 font-bold"
+                    >
+                      حذف وإضافة
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              <button
+                onClick={() => {
+                  setShowRemovalPopup(false)
+                  setPendingProduct(null)
+                  setRemovableProducts([])
+                }}
+                className="w-full bg-gray-400 text-white py-3 rounded-lg hover:opacity-90 font-bold"
+              >
+                إلغاء
+              </button>
             </div>
           </div>
         )}

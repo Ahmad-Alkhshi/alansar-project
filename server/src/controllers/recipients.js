@@ -3,17 +3,17 @@ import crypto from 'crypto';
 
 export const createRecipient = async (req, res) => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, basketLimit } = req.body;
 
     if (!name || !phone) {
-      return res.status(400).json({ error: 'الاسم والهاتف مطلوبان' });
+      return res.status(400).json({ error: 'الاسم ورقم الملف مطلوبان' });
     }
 
     const token = crypto.randomBytes(32).toString('hex');
 
     const { data, error } = await supabase
       .from('recipients')
-      .insert([{ name, phone, token }])
+      .insert([{ name, phone, token, basket_limit: basketLimit || 500000 }])
       .select()
       .single();
 

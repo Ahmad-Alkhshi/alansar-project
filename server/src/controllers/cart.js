@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase.js';
-import { checkMarginAllowed } from '../config/margin-logic.js';
+import { validateCartAddition } from '../config/cart-validation.js';
 
 export const getCart = async (req, res) => {
   try {
@@ -32,6 +32,7 @@ export const getCart = async (req, res) => {
         name: recipient.name,
         phone: recipient.phone,
         orderSubmitted: recipient.order_submitted,
+        basketLimit: recipient.basket_limit || 500000,
       },
     });
   } catch (error) {
@@ -73,7 +74,7 @@ export const addToCart = async (req, res) => {
 
     let { data: cart } = await supabase
       .from('carts')
-      .select('*, cart_items(*)')
+      .select('*, cart_items(*, products(*))')
       .eq('recipient_id', recipient.id)
       .single();
 
@@ -81,7 +82,7 @@ export const addToCart = async (req, res) => {
       const { data: newCart } = await supabase
         .from('carts')
         .insert([{ recipient_id: recipient.id }])
-        .select('*, cart_items(*)')
+        .select('*, cart_items(*, products(*))')
         .single();
       cart = newCart;
     }
@@ -93,24 +94,48 @@ export const addToCart = async (req, res) => {
       return res.status(400).json({ error: 'الكمية المطلوبة غير متوفرة في المخزون' });
     }
 
-    const currentItems = cart.cart_items
+    // إعداد بيانات السلة للتحقق
+    const cartItemsForValidation = cart.cart_items
       .filter(item => item.product_id !== productId)
       .map(item => ({
-        productId: item.product_id,
+        product_id: item.product_id,
         quantity: item.quantity,
-        unitPrice: item.unit_price,
+        unit_price: item.unit_price,
+        totalPrice: item.quantity * item.unit_price,
+        products: item.products
       }));
+    
+    // إضافة المنتج الجديد/المحدث
+    if (existingItem) {
+      cartItemsForValidation.push({
+        product_id: productId,
+        quantity: totalQuantity,
+        unit_price: product.price,
+        totalPrice: totalQuantity * product.price,
+        products: product
+      });
+    } else {
+      cartItemsForValidation.push({
+        product_id: productId,
+        quantity: quantity,
+        unit_price: product.price,
+        totalPrice: quantity * product.price,
+        products: product
+      });
+    }
 
-    currentItems.push({
-      productId,
-      quantity: totalQuantity,
-      unitPrice: product.price,
-    });
+    // التحقق من السلة في السيرفر
+    const validation = validateCartAddition(
+      cart.cart_items,
+      { price: product.price * quantity },
+      recipient.basket_limit || 500000
+    );
 
-    const marginCheck = checkMarginAllowed(currentItems);
-
-    if (!marginCheck.allowed) {
-      return res.status(400).json({ error: marginCheck.message, marginCheck });
+    if (!validation.allowed) {
+      return res.status(400).json({ 
+        error: validation.reason,
+        removableItems: validation.removableItems
+      });
     }
 
     if (existingItem) {
@@ -129,9 +154,14 @@ export const addToCart = async (req, res) => {
         }]);
     }
 
+    const newTotal = cartItemsForValidation.reduce((sum, item) => sum + item.totalPrice, 0);
+
     await supabase
       .from('carts')
-      .update({ total: marginCheck.currentTotal })
+      .update({ 
+        total: newTotal,
+        used_margin: validation.usedMargin || false
+      })
       .eq('id', cart.id);
 
     const { data: updatedCart } = await supabase
@@ -140,7 +170,13 @@ export const addToCart = async (req, res) => {
       .eq('id', cart.id)
       .single();
 
-    res.json({ cart: updatedCart, marginCheck });
+    res.json({ 
+      cart: updatedCart, 
+      validation: {
+        usedMargin: validation.usedMargin,
+        marginAmount: validation.marginAmount
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: 'فشل في إضافة المنتج' });
   }

@@ -80,6 +80,15 @@ export const api = {
     return res.json();
   },
 
+  updateProduct: async (id: string, data: any) => {
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+
   deleteProduct: async (id: string) => {
     const res = await fetch(`${API_URL}/products/${id}`, {
       method: 'DELETE',

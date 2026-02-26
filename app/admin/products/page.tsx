@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import * as XLSX from 'xlsx'
 
 interface Product {
   id: string
@@ -16,6 +17,8 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [formData, setFormData] = useState({
     name: '',
     quantity: '',
@@ -28,9 +31,16 @@ export default function AdminProductsPage() {
 
   async function loadProducts() {
     try {
-      const data = await api.getProducts()
-      setProducts(data)
+      const res = await fetch('http://localhost:5000/api/admin/products')
+      const data = await res.json()
+      // تحويل is_active إلى isActive
+      const products = data.map((p: any) => ({
+        ...p,
+        isActive: p.is_active
+      }))
+      setProducts(products)
     } catch (error) {
+      console.error('Load error:', error)
       alert('فشل في تحميل المنتجات')
     } finally {
       setLoading(false)
@@ -53,6 +63,47 @@ export default function AdminProductsPage() {
     }
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setImporting(true)
+    const reader = new FileReader()
+    
+    reader.onload = async (event) => {
+      try {
+        const data = event.target?.result
+        const workbook = XLSX.read(data, { type: 'binary' })
+        const sheetName = workbook.SheetNames[0]
+        const sheet = workbook.Sheets[sheetName]
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
+        
+        // تخطي السطر الأول (headers)
+        for (let i = 1; i < rows.length; i++) {
+          const [name, quantity, price] = rows[i]
+          
+          if (name && quantity && price) {
+            await api.createProduct({
+              name: `${name} - ${quantity}`,
+              price: parseInt(price),
+              stock: 999,
+            })
+          }
+        }
+        
+        alert('تم استيراد المنتجات بنجاح!')
+        loadProducts()
+      } catch (error) {
+        alert('فشل في استيراد المنتجات')
+      } finally {
+        setImporting(false)
+        e.target.value = ''
+      }
+    }
+    
+    reader.readAsBinaryString(file)
+  }
+
   async function deleteProduct(id: string) {
     if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return
     
@@ -61,6 +112,70 @@ export default function AdminProductsPage() {
       loadProducts()
     } catch (error) {
       alert('فشل في حذف المنتج')
+    }
+  }
+
+  async function toggleProductVisibility(id: string, currentStatus: boolean) {
+    try {
+      await api.updateProduct(id, { isActive: !currentStatus })
+      loadProducts()
+    } catch (error) {
+      console.error('Error:', error)
+      alert('فشل في تحديث المنتج')
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedProducts(prev => 
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    )
+  }
+
+  function toggleSelectAll() {
+    if (selectedProducts.length === products.length) {
+      setSelectedProducts([])
+    } else {
+      setSelectedProducts(products.map(p => p.id))
+    }
+  }
+
+  async function bulkHide() {
+    if (selectedProducts.length === 0) return
+    try {
+      for (const id of selectedProducts) {
+        await api.updateProduct(id, { isActive: false })
+      }
+      setSelectedProducts([])
+      loadProducts()
+    } catch (error) {
+      alert('فشل في إخفاء المنتجات')
+    }
+  }
+
+  async function bulkShow() {
+    if (selectedProducts.length === 0) return
+    try {
+      for (const id of selectedProducts) {
+        await api.updateProduct(id, { isActive: true })
+      }
+      setSelectedProducts([])
+      loadProducts()
+    } catch (error) {
+      alert('فشل في إظهار المنتجات')
+    }
+  }
+
+  async function bulkDelete() {
+    if (selectedProducts.length === 0) return
+    if (!confirm(`هل أنت متأكد من حذف ${selectedProducts.length} منتج؟`)) return
+    try {
+      for (const id of selectedProducts) {
+        await api.deleteProduct(id)
+      }
+      setSelectedProducts([])
+      loadProducts()
+    } catch (error) {
+      alert('فشل في حذف المنتجات')
     }
   }
 
@@ -73,12 +188,24 @@ export default function AdminProductsPage() {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-primary">إدارة المنتجات</h1>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark"
-          >
-            {showForm ? 'إلغاء' : 'إضافة منتج'}
-          </button>
+          <div className="flex gap-3">
+            <label className="bg-success text-white px-6 py-3 rounded-lg hover:opacity-90 cursor-pointer">
+              {importing ? 'جاري الاستيراد...' : 'استيراد من Excel'}
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImport}
+                disabled={importing}
+                className="hidden"
+              />
+            </label>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark"
+            >
+              {showForm ? 'إلغاء' : 'إضافة منتج'}
+            </button>
+          </div>
         </div>
 
         {showForm && (
@@ -118,27 +245,84 @@ export default function AdminProductsPage() {
           </form>
         )}
 
+        {selectedProducts.length > 0 && (
+          <div className="bg-primary-light p-4 rounded-lg mb-4 flex items-center justify-between">
+            <span className="text-lg font-bold">تم تحديد {selectedProducts.length} منتج</span>
+            <div className="flex gap-3">
+              <button
+                onClick={bulkShow}
+                className="bg-success text-white px-4 py-2 rounded-lg hover:opacity-90"
+              >
+                إظهار الكل
+              </button>
+              <button
+                onClick={bulkHide}
+                className="bg-warning text-white px-4 py-2 rounded-lg hover:opacity-90"
+              >
+                إخفاء الكل
+              </button>
+              <button
+                onClick={bulkDelete}
+                className="bg-error text-white px-4 py-2 rounded-lg hover:opacity-90"
+              >
+                حذف الكل
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <table className="w-full">
             <thead className="bg-primary text-white">
               <tr>
+                <th className="p-4 text-right">
+                  <input
+                    type="checkbox"
+                    checked={selectedProducts.length === products.length && products.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-5 h-5 cursor-pointer"
+                  />
+                </th>
                 <th className="p-4 text-right">المادة</th>
                 <th className="p-4 text-right">السعر</th>
+                <th className="p-4 text-right">الحالة</th>
                 <th className="p-4 text-right">إجراءات</th>
               </tr>
             </thead>
             <tbody>
               {products.map(product => (
                 <tr key={product.id} className="border-b hover:bg-gray-50">
+                  <td className="p-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedProducts.includes(product.id)}
+                      onChange={() => toggleSelect(product.id)}
+                      className="w-5 h-5 cursor-pointer"
+                    />
+                  </td>
                   <td className="p-4 text-lg">{product.name}</td>
                   <td className="p-4 text-lg font-bold">{product.price.toLocaleString('ar-SY')} ل.س</td>
                   <td className="p-4">
-                    <button
-                      onClick={() => deleteProduct(product.id)}
-                      className="bg-error text-white px-4 py-2 rounded hover:opacity-90"
-                    >
-                      حذف
-                    </button>
+                    <span className={`px-3 py-1 rounded text-white ${product.isActive ? 'bg-success' : 'bg-gray-400'}`}>
+                      {product.isActive ? 'ظاهر' : 'مخفي'}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => toggleProductVisibility(product.id, product.isActive)}
+                        className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-2xl"
+                        title={product.isActive ? 'إخفاء' : 'إظهار'}
+                      >
+                        {product.isActive ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                      <button
+                        onClick={() => deleteProduct(product.id)}
+                        className="bg-error text-white px-4 py-2 rounded hover:opacity-90"
+                      >
+                        حذف
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

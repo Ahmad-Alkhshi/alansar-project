@@ -1,178 +1,296 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-interface ProductSummary {
-  productId: string
-  productName: string
-  totalQuantity: number
-  unitPrice: number
-  totalPrice: number
-}
-
-interface OrderItem {
-  productName: string
-  quantity: number
-  unitPrice: number
-  total: number
-}
+import { api } from '@/lib/api'
+import * as XLSX from 'xlsx'
 
 interface Order {
-  orderId: string
-  recipientName: string
-  recipientPhone: string
-  finalTotal: number
-  status: string
-  createdAt: string
-  items: OrderItem[]
+  id: string
+  final_total: number
+  recipients: { name: string; phone: string }
+  order_items: Array<{
+    quantity: number
+    unit_price: number
+    products: { name: string }
+  }>
 }
 
-interface ReportData {
-  totalOrders: number
-  productSummary: ProductSummary[]
-  orders: Order[]
-}
-
-export default function AdminReportsPage() {
-  const [report, setReport] = useState<ReportData | null>(null)
+export default function ReportsPage() {
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [reportType, setReportType] = useState<'collective' | 'individual'>('collective')
 
   useEffect(() => {
-    loadReport()
+    loadOrders()
   }, [])
 
-  async function loadReport() {
+  async function loadOrders() {
     try {
-      const res = await fetch('/api/admin/reports')
-      const data = await res.json()
-      setReport(data)
+      const data = await api.getAllOrders()
+      setOrders(data)
     } catch (error) {
-      alert('فشل في تحميل التقرير')
+      alert('فشل في تحميل الطلبات')
     } finally {
       setLoading(false)
     }
   }
 
-  function exportCSV() {
-    if (!report) return
+  function getCollectiveReport() {
+    const productMap: { [key: string]: { name: string; unit: string; quantity: number } } = {}
     
-    let csv = 'اسم المنتج,الكمية الإجمالية,سعر الوحدة,المجموع\n'
-    report.productSummary.forEach(item => {
-      csv += `${item.productName},${item.totalQuantity},${item.unitPrice},${item.totalPrice}\n`
+    orders.forEach(order => {
+      order.order_items?.forEach(item => {
+        const fullName = item.products?.name || 'منتج'
+        const parts = fullName.split(' - ')
+        const name = parts[0] || fullName
+        const unit = parts[1] || ''
+        
+        const key = fullName
+        if (!productMap[key]) {
+          productMap[key] = { name, unit, quantity: 0 }
+        }
+        productMap[key].quantity += item.quantity
+      })
     })
+
+    return Object.values(productMap)
+  }
+
+  function exportCollectiveToExcel() {
+    const report = getCollectiveReport()
+    const ws = XLSX.utils.json_to_sheet(report.map(r => ({
+      'المادة': r.name,
+      'الكمية': r.unit,
+      'العدد المطلوب': r.quantity
+    })))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'التقرير الجماعي')
+    XLSX.writeFile(wb, 'تقرير_جماعي.xlsx')
+  }
+
+  function exportIndividualToExcel() {
+    const data = orders.map(order => ({
+      'الاسم': order.recipients?.name,
+      'رقم الملف': order.recipients?.phone,
+      'المجموع': order.final_total,
+      'المنتجات': order.order_items?.map(i => 
+        `${i.products?.name} (${i.quantity})`
+      ).join(', ')
+    }))
     
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = 'تقرير_المنتجات.csv'
-    link.click()
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'التقرير الفردي')
+    XLSX.writeFile(wb, 'تقرير_فردي.xlsx')
+  }
+
+  function printCollective() {
+    const report = getCollectiveReport()
+    const printWindow = window.open('', '', 'width=800,height=600')
+    printWindow?.document.write(`
+      <html dir="rtl">
+        <head>
+          <title>التقرير الجماعي</title>
+          <style>
+            body { font-family: Arial; padding: 20px; }
+            h1 { text-align: center; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: right; }
+            th { background-color: #2c5f2d; color: white; }
+          </style>
+        </head>
+        <body>
+          <h1>التقرير الجماعي - المواد المطلوبة</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>المادة</th>
+                <th>الكمية المطلوبة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${report.map(r => `
+                <tr>
+                  <td>${r.name}</td>
+                  <td>${r.quantity}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `)
+    printWindow?.document.close()
+    printWindow?.print()
+  }
+
+  function printIndividual() {
+    const printWindow = window.open('', '', 'width=800,height=600')
+    printWindow?.document.write(`
+      <html dir="rtl">
+        <head>
+          <title>التقرير الفردي</title>
+          <style>
+            body { font-family: Arial; padding: 20px; }
+            h1 { text-align: center; }
+            .order { margin-bottom: 30px; border: 1px solid #ddd; padding: 15px; }
+            .order h3 { margin: 0 0 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+            th { background-color: #2c5f2d; color: white; }
+          </style>
+        </head>
+        <body>
+          <h1>التقرير الفردي - طلبات المستفيدين</h1>
+          ${orders.map(order => `
+            <div class="order">
+              <h3>${order.recipients?.name} - ${order.recipients?.phone}</h3>
+              <p><strong>المجموع:</strong> ${order.final_total?.toLocaleString('ar-SY')} ل.س</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>المادة</th>
+                    <th>الكمية</th>
+                    <th>السعر</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${order.order_items?.map(item => `
+                    <tr>
+                      <td>${item.products?.name}</td>
+                      <td>${item.quantity}</td>
+                      <td>${(item.quantity * item.unit_price).toLocaleString('ar-SY')} ل.س</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `).join('')}
+        </body>
+      </html>
+    `)
+    printWindow?.document.close()
+    printWindow?.print()
   }
 
   if (loading) {
-    return <div className="p-8 text-center">جاري التحميل...</div>
+    return <div className="p-8 text-center text-xl">جاري التحميل...</div>
   }
 
-  if (!report) {
-    return <div className="p-8 text-center">لا توجد بيانات</div>
-  }
+  const collectiveReport = getCollectiveReport()
 
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-primary">التقارير</h1>
+        <h1 className="text-3xl font-bold text-primary mb-8">التقارير</h1>
+
+        <div className="flex gap-4 mb-8">
           <button
-            onClick={exportCSV}
-            className="bg-success text-white px-6 py-3 rounded-lg hover:opacity-90"
+            onClick={() => setReportType('collective')}
+            className={`px-6 py-3 rounded-lg font-bold ${
+              reportType === 'collective'
+                ? 'bg-primary text-white'
+                : 'bg-gray-200 text-gray-700'
+            }`}
           >
-            تصدير CSV
+            التقرير الجماعي
+          </button>
+          <button
+            onClick={() => setReportType('individual')}
+            className={`px-6 py-3 rounded-lg font-bold ${
+              reportType === 'individual'
+                ? 'bg-primary text-white'
+                : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            التقرير الفردي
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-gray-600 mb-2">إجمالي الطلبات</div>
-            <div className="text-4xl font-bold text-primary">{report.totalOrders}</div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-gray-600 mb-2">إجمالي المنتجات</div>
-            <div className="text-4xl font-bold text-primary">{report.productSummary.length}</div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="text-gray-600 mb-2">إجمالي القيمة</div>
-            <div className="text-4xl font-bold text-primary">
-              {report.productSummary.reduce((sum, item) => sum + item.totalPrice, 0).toLocaleString('ar-SY')} ل.س
+        {reportType === 'collective' ? (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">المواد المطلوبة للشراء</h2>
+              <div className="flex gap-3">
+                <button
+                  onClick={exportCollectiveToExcel}
+                  className="bg-success text-white px-6 py-3 rounded-lg hover:opacity-90"
+                >
+                  📥 تصدير Excel
+                </button>
+                <button
+                  onClick={printCollective}
+                  className="bg-primary text-white px-6 py-3 rounded-lg hover:opacity-90"
+                >
+                  🖨️ طباعة
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
-          <div className="bg-primary text-white p-4">
-            <h2 className="text-2xl font-bold">ملخص المنتجات المطلوبة</h2>
-          </div>
-          <table className="w-full">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-4 text-right">المنتج</th>
-                <th className="p-4 text-right">الكمية الإجمالية</th>
-                <th className="p-4 text-right">سعر الوحدة</th>
-                <th className="p-4 text-right">المجموع</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.productSummary.map(item => (
-                <tr key={item.productId} className="border-b hover:bg-gray-50">
-                  <td className="p-4 font-bold">{item.productName}</td>
-                  <td className="p-4">{item.totalQuantity}</td>
-                  <td className="p-4">{item.unitPrice.toLocaleString('ar-SY')} ل.س</td>
-                  <td className="p-4 font-bold text-primary">{item.totalPrice.toLocaleString('ar-SY')} ل.س</td>
+            <table className="w-full">
+              <thead className="bg-primary text-white">
+                <tr>
+                  <th className="p-4 text-right">المادة</th>
+                  <th className="p-4 text-right">الكمية</th>
+                  <th className="p-4 text-right">العدد المطلوب</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="bg-primary text-white p-4">
-            <h2 className="text-2xl font-bold">الطلبات الفردية</h2>
+              </thead>
+              <tbody>
+                {collectiveReport.map((item, idx) => (
+                  <tr key={idx} className="border-b hover:bg-gray-50">
+                    <td className="p-4 text-lg">{item.name}</td>
+                    <td className="p-4 text-lg">{item.unit}</td>
+                    <td className="p-4 text-lg font-bold text-primary">{item.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="p-4 space-y-4">
-            {report.orders.map(order => (
-              <div key={order.orderId} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <div className="text-xl font-bold">{order.recipientName}</div>
-                    <div className="text-gray-600">{order.recipientPhone}</div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">طلبات المستفيدين</h2>
+              <div className="flex gap-3">
+                <button
+                  onClick={exportIndividualToExcel}
+                  className="bg-success text-white px-6 py-3 rounded-lg hover:opacity-90"
+                >
+                  📥 تصدير Excel
+                </button>
+                <button
+                  onClick={printIndividual}
+                  className="bg-primary text-white px-6 py-3 rounded-lg hover:opacity-90"
+                >
+                  🖨️ طباعة
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {orders.map(order => (
+                <div key={order.id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold">{order.recipients?.name}</h3>
+                      <p className="text-gray-600">{order.recipients?.phone}</p>
+                    </div>
+                    <div className="text-2xl font-bold text-primary">
+                      {order.final_total?.toLocaleString('ar-SY')} ل.س
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <div className="text-2xl font-bold text-primary">{order.finalTotal.toLocaleString('ar-SY')} ل.س</div>
-                    <div className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString('ar-SY')}</div>
+                  <div className="space-y-2">
+                    {order.order_items?.map((item, idx) => (
+                      <div key={idx} className="flex justify-between bg-gray-50 p-3 rounded">
+                        <span>{item.products?.name}</span>
+                        <span className="font-bold">الكمية: {item.quantity}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="p-2 text-right">المنتج</th>
-                      <th className="p-2 text-right">الكمية</th>
-                      <th className="p-2 text-right">السعر</th>
-                      <th className="p-2 text-right">المجموع</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {order.items.map((item, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="p-2">{item.productName}</td>
-                        <td className="p-2">{item.quantity}</td>
-                        <td className="p-2">{item.unitPrice.toLocaleString('ar-SY')}</td>
-                        <td className="p-2">{item.total.toLocaleString('ar-SY')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

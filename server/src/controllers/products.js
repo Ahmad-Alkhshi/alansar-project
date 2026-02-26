@@ -39,9 +39,16 @@ export const updateProduct = async (req, res) => {
     const { id } = req.params;
     const { name, price, stock, imageUrl, isActive } = req.body;
 
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (price !== undefined) updateData.price = price;
+    if (stock !== undefined) updateData.stock = stock;
+    if (imageUrl !== undefined) updateData.image_url = imageUrl;
+    if (isActive !== undefined) updateData.is_active = isActive;
+
     const { data, error } = await supabase
       .from('products')
-      .update({ name, price, stock, image_url: imageUrl, is_active: isActive })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
@@ -50,6 +57,7 @@ export const updateProduct = async (req, res) => {
 
     res.json(data);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'فشل في تحديث المنتج' });
   }
 };
@@ -58,6 +66,19 @@ export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // حذف من order_items
+    await supabase
+      .from('order_items')
+      .delete()
+      .eq('product_id', id);
+
+    // حذف من cart_items
+    await supabase
+      .from('cart_items')
+      .delete()
+      .eq('product_id', id);
+
+    // ثم حذف المنتج نهائياً
     const { error } = await supabase
       .from('products')
       .delete()
@@ -67,6 +88,7 @@ export const deleteProduct = async (req, res) => {
 
     res.json({ message: 'تم حذف المنتج بنجاح' });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'فشل في حذف المنتج' });
   }
 };
