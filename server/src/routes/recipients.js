@@ -1,11 +1,12 @@
 import express from 'express';
-import { createRecipient, getAllRecipients } from '../controllers/recipients.js';
+import { createRecipient, getAllRecipients, bulkCreateRecipients } from '../controllers/recipients.js';
 import { supabase } from '../config/supabase.js';
 
 const router = express.Router();
 
 router.post('/', createRecipient);
 router.get('/', getAllRecipients);
+router.post('/bulk-create', bulkCreateRecipients);
 
 router.post('/reset-order/:token', async (req, res) => {
   try {
@@ -59,6 +60,17 @@ router.delete('/:id', async (req, res) => {
     res.json({ message: 'تم الحذف' });
   } catch (error) {
     res.status(500).json({ error: 'فشل في الحذف' });
+  }
+});
+
+router.post('/bulk-delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    const { error } = await supabase.from('recipients').delete().in('id', ids);
+    if (error) throw error;
+    res.json({ message: `تم حذف ${ids.length} مستفيد` });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل في الحذف الجماعي' });
   }
 });
 

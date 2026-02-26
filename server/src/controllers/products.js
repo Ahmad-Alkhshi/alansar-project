@@ -94,6 +94,46 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
+export const bulkDeleteProducts = async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    // حذف من order_items
+    await supabase.from('order_items').delete().in('product_id', ids);
+
+    // حذف من cart_items
+    await supabase.from('cart_items').delete().in('product_id', ids);
+
+    // حذف المنتجات
+    const { error } = await supabase.from('products').delete().in('id', ids);
+
+    if (error) throw error;
+
+    res.json({ message: `تم حذف ${ids.length} منتج` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'فشل في الحذف الجماعي' });
+  }
+};
+
+export const bulkCreateProducts = async (req, res) => {
+  try {
+    const { products } = req.body;
+
+    const { data, error } = await supabase
+      .from('products')
+      .insert(products)
+      .select();
+
+    if (error) throw error;
+
+    res.json({ message: `تم إضافة ${data.length} منتج`, data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'فشل في الإضافة الجماعية' });
+  }
+};
+
 export const updateProductsOrder = async (req, res) => {
   try {
     const { products } = req.body;
