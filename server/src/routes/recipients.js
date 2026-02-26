@@ -67,17 +67,31 @@ router.post('/bulk-delete', async (req, res) => {
   try {
     const { ids } = req.body;
     
+    console.log('Bulk delete request:', ids);
+    
     // حذف الطلبات المرتبطة
-    await supabase.from('orders').delete().in('recipient_id', ids);
+    const { error: ordersError } = await supabase
+      .from('orders')
+      .delete()
+      .in('recipient_id', ids);
+    
+    if (ordersError) console.error('Orders error:', ordersError);
     
     // حذف المستفيدين
-    const { error } = await supabase.from('recipients').delete().in('id', ids);
-    if (error) throw error;
+    const { error } = await supabase
+      .from('recipients')
+      .delete()
+      .in('id', ids);
+      
+    if (error) {
+      console.error('Recipients error:', error);
+      throw error;
+    }
     
     res.json({ message: `تم حذف ${ids.length} مستفيد` });
   } catch (error) {
     console.error('Bulk delete error:', error);
-    res.status(500).json({ error: 'فشل في الحذف الجماعي: ' + error.message });
+    res.status(500).json({ error: 'فشل في الحذف الجماعي: ' + (error.message || JSON.stringify(error)) });
   }
 });
 
