@@ -181,6 +181,16 @@ export default function AdminProductsPage() {
     }
   }
 
+  function downloadTemplate() {
+    const template = [
+      { 'اسم المادة': 'رز', 'الكمية': '1 كيلو', 'السعر': '45000' }
+    ]
+    const ws = XLSX.utils.json_to_sheet(template)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'نموذج')
+    XLSX.writeFile(wb, 'نموذج_المنتجات.xlsx')
+  }
+
   if (loading) {
     return <div className="p-8 text-center">جاري التحميل...</div>
   }
@@ -191,6 +201,12 @@ export default function AdminProductsPage() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-primary">إدارة المنتجات</h1>
           <div className="flex gap-3">
+            <button
+              onClick={downloadTemplate}
+              className="bg-warning text-white px-6 py-3 rounded-lg hover:opacity-90"
+            >
+              📄 تحميل نموذج Excel
+            </button>
             <label className="bg-success text-white px-6 py-3 rounded-lg hover:opacity-90 cursor-pointer">
               {importing ? 'جاري الاستيراد...' : 'استيراد من Excel'}
               <input
