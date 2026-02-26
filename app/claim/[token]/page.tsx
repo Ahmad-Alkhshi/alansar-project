@@ -580,25 +580,16 @@ export default function ClaimPage() {
             <div>
               <div className="text-lg text-gray-600 mb-1">المجموع الحالي</div>
               <div className="text-4xl font-bold text-primary">
-                {cartTotal.toLocaleString("ar-SY")} ل.س
+                {Math.min(cartTotal, baseLimit).toLocaleString("ar-SY")} ل.س
               </div>
             </div>
             <div>
               <div className="text-lg text-gray-600 mb-1">المتبقي</div>
-              <div
-                className={`text-4xl font-bold ${remaining >= 0 ? "text-success" : "text-secondary"}`}
-              >
-                {remaining.toLocaleString("ar-SY")} ل.س
+              <div className="text-4xl font-bold text-success">
+                {Math.max(0, baseLimit - cartTotal).toLocaleString("ar-SY")} ل.س
               </div>
             </div>
           </div>
-
-          {cartTotal > baseLimit && (
-            <div className="bg-secondary-light text-white p-4 rounded-lg text-lg">
-              تم استخدام الهامش الاستثنائي (+
-              {(cartTotal - baseLimit).toLocaleString("ar-SY")} ل.س)
-            </div>
-          )}
         </div>
       </div>
 
@@ -661,7 +652,7 @@ export default function ClaimPage() {
           })}
         </div>
 
-        {cartItemsCount > 0 && (
+        {canSubmitOrder && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-primary p-4 shadow-lg">
             <div className="max-w-7xl mx-auto">
               <button
@@ -674,7 +665,7 @@ export default function ClaimPage() {
                 }`}
               >
                 {canSubmitOrder
-                  ? `رفع الطلب (${cartItemsCount} منتج - ${cartTotal.toLocaleString("ar-SY")} ل.س)`
+                  ? `اعتماد الطلب (${cartItemsCount} منتج - بقيمة ${cartTotal.toLocaleString("ar-SY")} ل.س)`
                   : cartTotal < baseLimit
                     ? `لازم تكمل للحد المطلوب (${baseLimit.toLocaleString("ar-SY")} ل.س)`
                     : "لا يمكن رفع الطلب - تجاوز الحد المسموح"}

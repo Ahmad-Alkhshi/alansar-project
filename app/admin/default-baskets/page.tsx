@@ -36,8 +36,8 @@ export default function DefaultBasketsPage() {
   async function loadData() {
     try {
       const [basketsRes, productsRes] = await Promise.all([
-        fetch('${API_URL}/default-baskets'),
-        fetch('${API_URL}/products')
+        fetch(`${API_URL}/default-baskets`),
+        fetch(`${API_URL}/products`)
       ])
       const basketsData = await basketsRes.json()
       const productsData = await productsRes.json()
@@ -52,7 +52,7 @@ export default function DefaultBasketsPage() {
 
   async function createBasket(value: number) {
     try {
-      await fetch('${API_URL}/default-baskets', {
+      await fetch(`${API_URL}/default-baskets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ basket_value: value })
@@ -210,4 +210,5 @@ export default function DefaultBasketsPage() {
     </div>
   )
 }
+
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import * as XLSX from 'xlsx'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '${API_URL}'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface Product {
   id: string
@@ -351,3 +351,4 @@ export default function AdminProductsPage() {
     </div>
   )
 }
+

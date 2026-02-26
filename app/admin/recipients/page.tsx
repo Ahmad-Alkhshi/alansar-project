@@ -70,7 +70,7 @@ export default function AdminRecipientsPage() {
           return
         }
       } else {
-        await fetch('${API_URL}/recipients', {
+        await fetch(`${API_URL}/recipients`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -194,7 +194,7 @@ export default function AdminRecipientsPage() {
           const [name, phone, basketLimit] = rows[i]
           
           if (name && phone) {
-            await fetch('${API_URL}/recipients', {
+            await fetch(`${API_URL}/recipients`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
@@ -426,4 +426,5 @@ export default function AdminRecipientsPage() {
     </div>
   )
 }
+
 

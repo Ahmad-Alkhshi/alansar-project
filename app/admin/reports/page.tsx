@@ -33,7 +33,7 @@ export default function ReportsPage() {
       const [ordersData, recipientsData, basketsData] = await Promise.all([
         api.getAllOrders(),
         api.getAllRecipients(),
-        fetch('${API_URL}/default-baskets').then(r => r.json())
+        fetch(`${API_URL}/default-baskets`).then(r => r.json())
       ])
       setOrders(ordersData)
       setRecipients(recipientsData)
