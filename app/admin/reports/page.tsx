@@ -17,6 +17,8 @@ interface Order {
 
 export default function ReportsPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [recipients, setRecipients] = useState<any[]>([])
+  const [defaultBaskets, setDefaultBaskets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [reportType, setReportType] = useState<'collective' | 'individual'>('collective')
 
@@ -26,8 +28,14 @@ export default function ReportsPage() {
 
   async function loadOrders() {
     try {
-      const data = await api.getAllOrders()
-      setOrders(data)
+      const [ordersData, recipientsData, basketsData] = await Promise.all([
+        api.getAllOrders(),
+        api.getAllRecipients(),
+        fetch('http://localhost:5000/api/default-baskets').then(r => r.json())
+      ])
+      setOrders(ordersData)
+      setRecipients(recipientsData)
+      setDefaultBaskets(basketsData)
     } catch (error) {
       alert('فشل في تحميل الطلبات')
     } finally {
@@ -38,6 +46,7 @@ export default function ReportsPage() {
   function getCollectiveReport() {
     const productMap: { [key: string]: { name: string; unit: string; quantity: number } } = {}
     
+    // من الطلبات الحقيقية
     orders.forEach(order => {
       order.order_items?.forEach(item => {
         const fullName = item.products?.name || 'منتج'
@@ -52,6 +61,30 @@ export default function ReportsPage() {
         productMap[key].quantity += item.quantity
       })
     })
+    
+    // من السلال الافتراضية
+    recipients.forEach(recipient => {
+      const hasOrder = orders.some(o => o.recipients?.phone === recipient.phone)
+      if (!hasOrder && !recipient.order_submitted) {
+        const basketValue = recipient.basket_limit || 500000
+        const defaultBasket = defaultBaskets.find(b => b.basket_value === basketValue)
+        
+        if (defaultBasket && defaultBasket.items) {
+          defaultBasket.items.forEach((item: any) => {
+            const fullName = item.products?.name || 'منتج'
+            const parts = fullName.split(' - ')
+            const name = parts[0] || fullName
+            const unit = parts[1] || ''
+            
+            const key = fullName
+            if (!productMap[key]) {
+              productMap[key] = { name, unit, quantity: 0 }
+            }
+            productMap[key].quantity += item.quantity
+          })
+        }
+      }
+    })
 
     return Object.values(productMap)
   }
@@ -61,7 +94,7 @@ export default function ReportsPage() {
     const ws = XLSX.utils.json_to_sheet(report.map(r => ({
       'المادة': r.name,
       'الكمية': r.unit,
-      'العدد المطلوب': r.quantity
+      'الكمية المطلوبة': r.quantity
     })))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'التقرير الجماعي')
@@ -69,16 +102,35 @@ export default function ReportsPage() {
   }
 
   function exportIndividualToExcel() {
-    const data = orders.map(order => ({
-      'الاسم': order.recipients?.name,
-      'رقم الملف': order.recipients?.phone,
-      'المجموع': order.final_total,
-      'المنتجات': order.order_items?.map(i => 
-        `${i.products?.name} (${i.quantity})`
-      ).join(', ')
-    }))
+    const allRecipients = recipients.map(recipient => {
+      const order = orders.find(o => o.recipients?.phone === recipient.phone)
+      
+      if (order) {
+        return {
+          'الاسم': order.recipients?.name,
+          'رقم الملف': order.recipients?.phone,
+          'المجموع': order.final_total,
+          'المنتجات': order.order_items?.map(i => 
+            `${i.products?.name} (${i.quantity})`
+          ).join(', ')
+        }
+      } else if (!recipient.order_submitted) {
+        const basketValue = recipient.basket_limit || 500000
+        const defaultBasket = defaultBaskets.find(b => b.basket_value === basketValue)
+        
+        return {
+          'الاسم': recipient.name,
+          'رقم الملف': recipient.phone,
+          'المجموع': basketValue,
+          'المنتجات': defaultBasket?.items?.map((i: any) => 
+            `${i.products?.name} (${i.quantity})`
+          ).join(', ') || 'سلة افتراضية'
+        }
+      }
+      return null
+    }).filter(Boolean)
     
-    const ws = XLSX.utils.json_to_sheet(data)
+    const ws = XLSX.utils.json_to_sheet(allRecipients)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'التقرير الفردي')
     XLSX.writeFile(wb, 'تقرير_فردي.xlsx')
@@ -105,6 +157,7 @@ export default function ReportsPage() {
             <thead>
               <tr>
                 <th>المادة</th>
+                <th>الكمية</th>
                 <th>الكمية المطلوبة</th>
               </tr>
             </thead>
@@ -112,6 +165,7 @@ export default function ReportsPage() {
               ${report.map(r => `
                 <tr>
                   <td>${r.name}</td>
+                  <td>${r.unit}</td>
                   <td>${r.quantity}</td>
                 </tr>
               `).join('')}
@@ -232,7 +286,7 @@ export default function ReportsPage() {
                 <tr>
                   <th className="p-4 text-right">المادة</th>
                   <th className="p-4 text-right">الكمية</th>
-                  <th className="p-4 text-right">العدد المطلوب</th>
+                  <th className="p-4 text-right">الكمية المطلوبة</th>
                 </tr>
               </thead>
               <tbody>
@@ -267,27 +321,60 @@ export default function ReportsPage() {
             </div>
 
             <div className="space-y-6">
-              {orders.map(order => (
-                <div key={order.id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold">{order.recipients?.name}</h3>
-                      <p className="text-gray-600">{order.recipients?.phone}</p>
-                    </div>
-                    <div className="text-2xl font-bold text-primary">
-                      {order.final_total?.toLocaleString('ar-SY')} ل.س
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {order.order_items?.map((item, idx) => (
-                      <div key={idx} className="flex justify-between bg-gray-50 p-3 rounded">
-                        <span>{item.products?.name}</span>
-                        <span className="font-bold">الكمية: {item.quantity}</span>
+              {recipients.map((recipient, idx) => {
+                const order = orders.find(o => o.recipients?.phone === recipient.phone)
+                
+                if (order) {
+                  return (
+                    <div key={order.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="text-xl font-bold">{order.recipients?.name}</h3>
+                          <p className="text-gray-600">{order.recipients?.phone}</p>
+                        </div>
+                        <div className="text-2xl font-bold text-primary">
+                          {order.final_total?.toLocaleString('ar-SY')} ل.س
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                      <div className="space-y-2">
+                        {order.order_items?.map((item, idx) => (
+                          <div key={idx} className="flex justify-between bg-gray-50 p-3 rounded">
+                            <span>{item.products?.name}</span>
+                            <span className="font-bold">الكمية: {item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                } else if (!recipient.order_submitted) {
+                  const basketValue = recipient.basket_limit || 500000
+                  const defaultBasket = defaultBaskets.find(b => b.basket_value === basketValue)
+                  
+                  return (
+                    <div key={idx} className="border rounded-lg p-4 bg-yellow-50">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="text-xl font-bold">{recipient.name}</h3>
+                          <p className="text-gray-600">{recipient.phone}</p>
+                          <p className="text-sm text-warning font-bold mt-1">سلة افتراضية</p>
+                        </div>
+                        <div className="text-2xl font-bold text-primary">
+                          {basketValue.toLocaleString('ar-SY')} ل.س
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {defaultBasket?.items?.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between bg-white p-3 rounded">
+                            <span>{item.products?.name}</span>
+                            <span className="font-bold">الكمية: {item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })}
             </div>
           </div>
         )}

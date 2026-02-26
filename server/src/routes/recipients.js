@@ -6,18 +6,35 @@ const router = express.Router();
 
 router.post('/', createRecipient);
 router.get('/', getAllRecipients);
+
+router.post('/reset-order/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const { error } = await supabase
+      .from('recipients')
+      .update({ order_submitted: false })
+      .eq('token', token);
+    
+    if (error) throw error;
+    
+    res.json({ message: 'تم إعادة تعيين الطلب' });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل في إعادة التعيين' });
+  }
+});
+
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, phone, basketLimit } = req.body;
-    console.log('PUT request received:', { id, name, phone, basketLimit });
+    const { name, phone, basketLimit, linkDurationDays, linkActive } = req.body;
     
-    const updateData = { name, phone };
-    if (basketLimit !== undefined) {
-      updateData.basket_limit = basketLimit;
-    }
-    
-    console.log('Update data:', updateData);
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (basketLimit !== undefined) updateData.basket_limit = basketLimit;
+    if (linkDurationDays !== undefined) updateData.link_duration_days = linkDurationDays;
+    if (linkActive !== undefined) updateData.link_active = linkActive;
     
     const { data, error } = await supabase
       .from('recipients')
@@ -25,16 +42,12 @@ router.put('/:id', async (req, res) => {
       .eq('id', id)
       .select();
     
-    console.log('Supabase response:', { data, error });
-    
     if (error) {
-      console.error('Supabase error:', error);
       return res.status(500).json({ error: error.message });
     }
     
     res.json(data[0] || data);
   } catch (error) {
-    console.error('Update failed:', error);
     res.status(500).json({ error: 'فشل في التعديل' });
   }
 });

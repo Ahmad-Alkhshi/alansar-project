@@ -80,18 +80,38 @@ export const api = {
     return res.json();
   },
 
-  updateProduct: async (id: string, data: any) => {
+  deleteProduct: async (id: string) => {
     const res = await fetch(`${API_URL}/products/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      method: 'DELETE',
     });
     return res.json();
   },
 
-  deleteProduct: async (id: string) => {
-    const res = await fetch(`${API_URL}/products/${id}`, {
-      method: 'DELETE',
+  // Edit Requests
+  requestEdit: async (token: string, reason: string) => {
+    const res = await fetch(`${API_URL}/orders/request-edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, reason }),
+    });
+    return res.json();
+  },
+
+  getEditRequests: async () => {
+    const res = await fetch(`${API_URL}/orders/edit-requests`);
+    return res.json();
+  },
+
+  approveEditRequest: async (requestId: string) => {
+    const res = await fetch(`${API_URL}/orders/edit-requests/${requestId}/approve`, {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  rejectEditRequest: async (requestId: string) => {
+    const res = await fetch(`${API_URL}/orders/edit-requests/${requestId}/reject`, {
+      method: 'POST',
     });
     return res.json();
   },

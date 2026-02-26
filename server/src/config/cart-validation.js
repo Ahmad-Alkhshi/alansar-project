@@ -102,6 +102,8 @@ export function validateCartAddition(cartItems, productToAdd, recipientBasketLim
 export function validateOrderSubmission(cartItems, recipientBasketLimit = BASE_LIMIT) {
   const total = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
   
+  console.log('Validating order submission:', { total, recipientBasketLimit, cartItems: cartItems.length });
+  
   // يجب أن يكون المجموع >= الحد الأساسي
   if (total < recipientBasketLimit) {
     return {
@@ -112,6 +114,8 @@ export function validateOrderSubmission(cartItems, recipientBasketLimit = BASE_L
   
   // يجب ألا يتجاوز السقف الأقصى
   const maxLimit = recipientBasketLimit + MARGIN;
+  console.log('Max limit check:', { total, maxLimit, exceeds: total > maxLimit });
+  
   if (total > maxLimit) {
     return {
       allowed: false,

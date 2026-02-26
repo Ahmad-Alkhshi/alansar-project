@@ -12,6 +12,7 @@ export default function AdminSidebar() {
     { href: '/admin/products', label: 'المنتجات', icon: '📦' },
     { href: '/admin/recipients', label: 'المستفيدين', icon: '👥' },
     { href: '/admin/orders', label: 'الطلبات', icon: '📋' },
+    { href: '/admin/default-baskets', label: 'السلال الافتراضية', icon: '🧺' },
     { href: '/admin/reports', label: 'التقارير', icon: '📊' },
   ]
 

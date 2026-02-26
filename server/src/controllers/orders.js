@@ -3,7 +3,7 @@ import { validateOrderSubmission } from '../config/cart-validation.js';
 
 export const submitOrder = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, isEdit } = req.body;
 
     if (!token) {
       return res.status(400).json({ error: 'Token مطلوب' });
@@ -19,7 +19,7 @@ export const submitOrder = async (req, res) => {
       return res.status(404).json({ error: 'رابط غير صحيح' });
     }
 
-    if (recipient.order_submitted) {
+    if (recipient.order_submitted && !isEdit) {
       return res.status(400).json({ error: 'تم تأكيد الطلب مسبقاً' });
     }
 
@@ -54,6 +54,23 @@ export const submitOrder = async (req, res) => {
       });
     }
 
+    // حفظ بيانات الطلب القديم إذا كان تعديل
+    let oldOrderData = null;
+    if (isEdit) {
+      const { data: existingOrder } = await supabase
+        .from('orders')
+        .select('*, order_items(*, products(*))')
+        .eq('recipient_id', recipient.id)
+        .single();
+      
+      if (existingOrder) {
+        oldOrderData = {
+          final_total: existingOrder.final_total,
+          items: existingOrder.order_items
+        };
+      }
+    }
+
     // التحقق من المخزون
     for (const item of cart.cart_items) {
       if (item.quantity > item.products.stock) {
@@ -72,7 +89,8 @@ export const submitOrder = async (req, res) => {
       .insert([{
         recipient_id: recipient.id,
         final_total: finalTotal,
-        status: 'pending',
+        status: isEdit ? 'pending_edit' : 'pending',
+        old_order_data: oldOrderData
       }])
       .select()
       .single();

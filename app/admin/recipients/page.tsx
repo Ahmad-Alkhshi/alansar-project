@@ -12,6 +12,8 @@ interface Recipient {
   orderSubmitted: boolean
   createdAt: string
   basketLimit: number
+  linkDurationDays: number
+  linkActive: boolean
 }
 
 export default function AdminRecipientsPage() {
@@ -22,6 +24,7 @@ export default function AdminRecipientsPage() {
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([])
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null)
   const [formData, setFormData] = useState({ name: '', phone: '', basketLimit: '500000' })
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
   useEffect(() => {
     loadRecipients()
@@ -32,7 +35,9 @@ export default function AdminRecipientsPage() {
       const data = await api.getAllRecipients()
       const recipients = data.map((r: any) => ({
         ...r,
-        basketLimit: r.basket_limit || r.basketLimit || 500000
+        basketLimit: r.basket_limit || r.basketLimit || 500000,
+        linkDurationDays: r.link_duration_days || r.linkDurationDays || 2,
+        linkActive: r.link_active !== undefined ? r.link_active : (r.linkActive !== undefined ? r.linkActive : true)
       }))
       setRecipients(recipients)
     } catch (error) {
@@ -93,10 +98,37 @@ export default function AdminRecipientsPage() {
     setShowForm(true)
   }
 
+  async function toggleLinkActive(id: string, currentStatus: boolean) {
+    try {
+      await fetch(`http://localhost:5000/api/recipients/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linkActive: !currentStatus })
+      })
+      loadRecipients()
+    } catch (error) {
+      alert('فشل في تغيير حالة الرابط')
+    }
+  }
+
+  async function updateLinkDuration(id: string, days: number) {
+    try {
+      await fetch(`http://localhost:5000/api/recipients/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linkDurationDays: days })
+      })
+      loadRecipients()
+    } catch (error) {
+      alert('فشل في تحديث مدة الرابط')
+    }
+  }
+
   function copyLink(token: string) {
     const link = `${window.location.origin}/claim/${token}`
     navigator.clipboard.writeText(link)
-    alert('تم نسخ الرابط')
+    setCopiedToken(token)
+    setTimeout(() => setCopiedToken(null), 2000)
   }
 
   function toggleSelect(id: string) {
@@ -291,7 +323,9 @@ export default function AdminRecipientsPage() {
                 <th className="p-4 text-right">الاسم</th>
                 <th className="p-4 text-right">رقم الملف</th>
                 <th className="p-4 text-right">قيمة السلة</th>
-                <th className="p-4 text-right">الحالة</th>
+                <th className="p-4 text-right">مدة الرابط</th>
+                <th className="p-4 text-right">حالة الرابط</th>
+                {/* <th className="p-4 text-right">الحالة</th> */}
                 <th className="p-4 text-right">الرابط</th>
               </tr>
             </thead>
@@ -310,16 +344,35 @@ export default function AdminRecipientsPage() {
                   <td className="p-4">{recipient.phone}</td>
                   <td className="p-4 font-bold text-primary">{(recipient.basketLimit || 500000).toLocaleString('ar-SY')} ل.س</td>
                   <td className="p-4">
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={recipient.linkDurationDays}
+                      onChange={(e) => updateLinkDuration(recipient.id, Number(e.target.value))}
+                      className="border-2 border-gray-300 rounded px-2 py-1 w-16 text-center"
+                    />
+                    <span className="mr-2">يوم</span>
+                  </td>
+                  <td className="p-4">
+                    <button
+                      onClick={() => toggleLinkActive(recipient.id, recipient.linkActive)}
+                      className={`px-4 py-2 rounded font-bold ${recipient.linkActive ? 'bg-success text-white' : 'bg-error text-white'}`}
+                    >
+                      {recipient.linkActive ? 'مفعّل' : 'ملغى'}
+                    </button>
+                  </td>
+                  {/* <td className="p-4">
                     <span className={`px-3 py-1 rounded ${recipient.orderSubmitted ? 'bg-success text-white' : 'bg-warning text-white'}`}>
                       {recipient.orderSubmitted ? 'تم الإرسال' : 'لم يرسل'}
                     </span>
-                  </td>
+                  </td> */}
                   <td className="p-4">
                     <button
                       onClick={() => copyLink(recipient.token)}
                       className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark ml-2"
                     >
-                      نسخ الرابط
+                      {copiedToken === recipient.token ? 'تم النسخ ✓' : 'نسخ الرابط'}
                     </button>
                     <button
                       onClick={() => handleEdit(recipient)}

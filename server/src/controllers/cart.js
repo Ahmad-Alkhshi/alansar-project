@@ -33,6 +33,9 @@ export const getCart = async (req, res) => {
         phone: recipient.phone,
         orderSubmitted: recipient.order_submitted,
         basketLimit: recipient.basket_limit || 500000,
+        link_active: recipient.link_active,
+        link_duration_days: recipient.link_duration_days,
+        created_at: recipient.created_at
       },
     });
   } catch (error) {
@@ -244,5 +247,40 @@ export const removeFromCart = async (req, res) => {
     res.json({ cart: updatedCart });
   } catch (error) {
     res.status(500).json({ error: 'فشل في حذف المنتج' });
+  }
+};
+
+export const clearCart = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token مطلوب' });
+    }
+
+    const { data: recipient } = await supabase
+      .from('recipients')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (!recipient) {
+      return res.status(404).json({ error: 'رابط غير صحيح' });
+    }
+
+    const { data: cart } = await supabase
+      .from('carts')
+      .select('*')
+      .eq('recipient_id', recipient.id)
+      .single();
+
+    if (cart) {
+      await supabase.from('cart_items').delete().eq('cart_id', cart.id);
+      await supabase.from('carts').update({ total: 0 }).eq('id', cart.id);
+    }
+
+    res.json({ message: 'تم حذف السلة' });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل في حذف السلة' });
   }
 };
