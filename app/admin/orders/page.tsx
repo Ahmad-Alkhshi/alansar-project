@@ -172,20 +172,20 @@ export default function AdminOrdersPage() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-2xl font-bold mb-2">
-                        {order.recipient?.name || order.recipients?.name}
+                        {order.recipient?.name}
                       </h3>
                       <p className="text-gray-600">
-                        {order.recipient?.phone || order.recipients?.phone}
+                        {order.recipient?.phone}
                       </p>
                       <p className="text-sm text-gray-500 mt-2">
                         {new Date(
-                          order.createdAt || order.created_at,
+                          order.createdAt,
                         ).toLocaleString("ar-SY")}
                       </p>
                     </div>
                     <div className="text-left">
                       <div className="text-3xl font-bold text-primary mb-2">
-                        {(order.finalTotal || order.final_total).toLocaleString(
+                        {order.finalTotal.toLocaleString(
                           "ar-SY",
                         )}{" "}
                         ل.س
@@ -211,31 +211,27 @@ export default function AdminOrdersPage() {
                   <div className="border-t pt-4">
                     <h4 className="font-bold mb-3">المنتجات:</h4>
                     <div className="space-y-2">
-                      {(order.items || order.order_items || []).map(
+                      {order.items.map(
                         (item, idx) => (
                           <div
                             key={item.id || idx}
                             className="flex justify-between items-center bg-gray-50 p-3 rounded"
                           >
                             <span className="font-medium">
-                              {item.product?.name ||
-                                item.products?.name ||
-                                "منتج"}
+                              {item.product?.name || "منتج"}
                             </span>
                             <div className="flex gap-4 items-center">
                               <span className="text-gray-600">
                                 الكمية: {item.quantity}
                               </span>
                               <span className="text-gray-600">
-                                {(
-                                  item.unitPrice || item.unit_price
-                                ).toLocaleString("ar-SY")}{" "}
+                                {item.unitPrice.toLocaleString("ar-SY")}{" "}
                                 ل.س
                               </span>
                               <span className="font-bold text-primary">
                                 {(
                                   item.quantity *
-                                  (item.unitPrice || item.unit_price)
+                                  item.unitPrice
                                 ).toLocaleString("ar-SY")}{" "}
                                 ل.س
                               </span>
