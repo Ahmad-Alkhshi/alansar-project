@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import * as XLSX from 'xlsx'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '${API_URL}'
+
 interface Product {
   id: string
   name: string
@@ -31,7 +33,7 @@ export default function AdminProductsPage() {
 
   async function loadProducts() {
     try {
-      const res = await fetch('http://localhost:5000/api/admin/products')
+      const res = await fetch(`${API_URL}/admin/products`)
       const data = await res.json()
       // تحويل is_active إلى isActive
       const products = data.map((p: any) => ({

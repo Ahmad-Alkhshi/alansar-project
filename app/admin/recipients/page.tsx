@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/config'
+
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import * as XLSX from 'xlsx'
@@ -52,7 +54,7 @@ export default function AdminRecipientsPage() {
     try {
       if (editingRecipient) {
         console.log('Editing recipient:', editingRecipient.id, formData)
-        const res = await fetch(`http://localhost:5000/api/recipients/${editingRecipient.id}`, {
+        const res = await fetch(`${API_URL}/recipients/${editingRecipient.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -68,7 +70,7 @@ export default function AdminRecipientsPage() {
           return
         }
       } else {
-        await fetch('http://localhost:5000/api/recipients', {
+        await fetch('${API_URL}/recipients', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -100,7 +102,7 @@ export default function AdminRecipientsPage() {
 
   async function toggleLinkActive(id: string, currentStatus: boolean) {
     try {
-      await fetch(`http://localhost:5000/api/recipients/${id}`, {
+      await fetch(`${API_URL}/recipients/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ linkActive: !currentStatus })
@@ -113,7 +115,7 @@ export default function AdminRecipientsPage() {
 
   async function updateLinkDuration(id: string, days: number) {
     try {
-      await fetch(`http://localhost:5000/api/recipients/${id}`, {
+      await fetch(`${API_URL}/recipients/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ linkDurationDays: days })
@@ -150,7 +152,7 @@ export default function AdminRecipientsPage() {
     if (!confirm(`هل أنت متأكد من حذف ${selectedRecipients.length} مستفيد؟`)) return
     try {
       for (const id of selectedRecipients) {
-        await fetch(`http://localhost:5000/api/recipients/${id}`, { method: 'DELETE' })
+        await fetch(`${API_URL}/recipients/${id}`, { method: 'DELETE' })
       }
       setSelectedRecipients([])
       loadRecipients()
@@ -192,7 +194,7 @@ export default function AdminRecipientsPage() {
           const [name, phone, basketLimit] = rows[i]
           
           if (name && phone) {
-            await fetch('http://localhost:5000/api/recipients', {
+            await fetch('${API_URL}/recipients', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
@@ -303,7 +305,7 @@ export default function AdminRecipientsPage() {
               <button
                 onClick={async () => {
                   for (const id of selectedRecipients) {
-                    await fetch(`http://localhost:5000/api/recipients/${id}`, {
+                    await fetch(`${API_URL}/recipients/${id}`, {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ linkActive: true })
@@ -319,7 +321,7 @@ export default function AdminRecipientsPage() {
               <button
                 onClick={async () => {
                   for (const id of selectedRecipients) {
-                    await fetch(`http://localhost:5000/api/recipients/${id}`, {
+                    await fetch(`${API_URL}/recipients/${id}`, {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ linkActive: false })
@@ -424,3 +426,4 @@ export default function AdminRecipientsPage() {
     </div>
   )
 }
+

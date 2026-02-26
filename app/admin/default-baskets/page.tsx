@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/config'
+
 import { useEffect, useState } from 'react'
 
 interface Product {
@@ -34,8 +36,8 @@ export default function DefaultBasketsPage() {
   async function loadData() {
     try {
       const [basketsRes, productsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/default-baskets'),
-        fetch('http://localhost:5000/api/products')
+        fetch('${API_URL}/default-baskets'),
+        fetch('${API_URL}/products')
       ])
       const basketsData = await basketsRes.json()
       const productsData = await productsRes.json()
@@ -50,7 +52,7 @@ export default function DefaultBasketsPage() {
 
   async function createBasket(value: number) {
     try {
-      await fetch('http://localhost:5000/api/default-baskets', {
+      await fetch('${API_URL}/default-baskets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ basket_value: value })
@@ -63,7 +65,7 @@ export default function DefaultBasketsPage() {
 
   async function saveBasketItems(basketId: string) {
     try {
-      await fetch(`http://localhost:5000/api/default-baskets/${basketId}/items`, {
+      await fetch(`${API_URL}/default-baskets/${basketId}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: selectedProducts })
@@ -208,3 +210,4 @@ export default function DefaultBasketsPage() {
     </div>
   )
 }
+

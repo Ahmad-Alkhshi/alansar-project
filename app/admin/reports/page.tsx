@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/config'
+
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import * as XLSX from 'xlsx'
@@ -31,7 +33,7 @@ export default function ReportsPage() {
       const [ordersData, recipientsData, basketsData] = await Promise.all([
         api.getAllOrders(),
         api.getAllRecipients(),
-        fetch('http://localhost:5000/api/default-baskets').then(r => r.json())
+        fetch('${API_URL}/default-baskets').then(r => r.json())
       ])
       setOrders(ordersData)
       setRecipients(recipientsData)
@@ -382,3 +384,4 @@ export default function ReportsPage() {
     </div>
   )
 }
+
