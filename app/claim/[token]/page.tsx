@@ -576,20 +576,22 @@ export default function ClaimPage() {
 
       <div className="bg-white border-b-4 border-primary-light py-6 px-4 sticky top-0 z-10 shadow">
         <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <div className="text-lg text-gray-600 mb-1">المجموع الحالي</div>
-              <div className="text-4xl font-bold text-primary">
-                {cartTotal.toLocaleString("en-US")} ل.س
+          {!canSubmitOrder && (
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <div className="text-lg text-gray-600 mb-1">المجموع الحالي</div>
+                <div className="text-4xl font-bold text-primary">
+                  {cartTotal.toLocaleString("en-US")} ل.س
+                </div>
+              </div>
+              <div>
+                <div className="text-lg text-gray-600 mb-1">المتبقي</div>
+                <div className="text-4xl font-bold text-success">
+                  {Math.max(0, baseLimit - cartTotal).toLocaleString("en-US")} ل.س
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-lg text-gray-600 mb-1">المتبقي</div>
-              <div className="text-4xl font-bold text-success">
-                {Math.max(0, baseLimit - cartTotal).toLocaleString("en-US")} ل.س
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -619,33 +621,32 @@ export default function ClaimPage() {
             return (
               <div
                 key={product.id}
-                className="bg-white rounded-lg shadow p-4 flex items-center justify-between gap-3"
+                className="bg-white rounded-lg shadow p-4"
               >
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-1">{product.name}</h3>
+                <h3 className="text-xl font-bold mb-3">{product.name}</h3>
+                <div className="flex items-center justify-between">
                   <div className="text-2xl font-bold text-primary">
                     {product.price.toLocaleString("en-US")} ل.س
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => removeFromCart(product.id)}
-                    disabled={quantity === 0}
-                    className="bg-error text-white text-2xl font-bold w-12 h-12 rounded-lg hover:opacity-90 disabled:opacity-30"
-                  >
-                    -
-                  </button>
-                  <div className="text-2xl font-bold text-primary min-w-[50px] text-center bg-gray-100 rounded-lg px-3 py-2">
-                    {quantity}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => removeFromCart(product.id)}
+                      disabled={quantity === 0}
+                      className="bg-error text-white text-2xl font-bold w-12 h-12 rounded-lg hover:opacity-90 disabled:opacity-30"
+                    >
+                      -
+                    </button>
+                    <div className="text-2xl font-bold text-primary min-w-[50px] text-center bg-gray-100 rounded-lg px-3 py-2">
+                      {quantity}
+                    </div>
+                    <button
+                      onClick={() => addToCart(product.id)}
+                      disabled={isDisabled}
+                      className="bg-success text-white text-2xl font-bold w-12 h-12 rounded-lg hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
                   </div>
-                  <button
-                    onClick={() => addToCart(product.id)}
-                    disabled={isDisabled}
-                    className="bg-success text-white text-2xl font-bold w-12 h-12 rounded-lg hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    +
-                  </button>
                 </div>
               </div>
             );
@@ -706,7 +707,7 @@ export default function ClaimPage() {
                 <div className="flex justify-between items-center text-2xl font-bold mb-4">
                   <span>المجموع الكلي:</span>
                   <span className="text-primary">
-                    {cartTotal.toLocaleString("en-US")} ل.س
+                    {baseLimit.toLocaleString("en-US")} ل.س
                   </span>
                 </div>
               </div>
