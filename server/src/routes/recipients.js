@@ -70,22 +70,13 @@ router.post('/bulk-delete', async (req, res) => {
     console.log('Bulk delete request:', ids);
     
     // حذف الطلبات المرتبطة
-    const { error: ordersError } = await supabase
-      .from('orders')
-      .delete()
-      .in('recipient_id', ids);
-    
-    if (ordersError) console.error('Orders error:', ordersError);
+    for (const id of ids) {
+      await supabase.from('orders').delete().eq('recipient_id', id);
+    }
     
     // حذف المستفيدين
-    const { error } = await supabase
-      .from('recipients')
-      .delete()
-      .in('id', ids);
-      
-    if (error) {
-      console.error('Recipients error:', error);
-      throw error;
+    for (const id of ids) {
+      await supabase.from('recipients').delete().eq('id', id);
     }
     
     res.json({ message: `تم حذف ${ids.length} مستفيد` });
