@@ -26,7 +26,8 @@ export const createProduct = async (req, res) => {
       price, 
       stock, 
       image_url: imageUrl, 
-      is_active: true
+      is_active: true,
+      max_quantity: maxQuantity || 10
     };
 
     const { data, error } = await supabase
@@ -50,7 +51,7 @@ export const createProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, stock, imageUrl, isActive, maxQuantity, max_quantity } = req.body;
+    const { name, price, stock, imageUrl, isActive, maxQuantity } = req.body;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -58,6 +59,7 @@ export const updateProduct = async (req, res) => {
     if (stock !== undefined) updateData.stock = stock;
     if (imageUrl !== undefined) updateData.image_url = imageUrl;
     if (isActive !== undefined) updateData.is_active = isActive;
+    if (maxQuantity !== undefined) updateData.max_quantity = maxQuantity;
 
     console.log('Update product:', id, updateData);
 
@@ -145,15 +147,9 @@ export const bulkCreateProducts = async (req, res) => {
   try {
     const { products } = req.body;
 
-    // Remove max_quantity if column doesn't exist
-    const productsToInsert = products.map(p => {
-      const { maxQuantity, max_quantity, ...rest } = p;
-      return rest;
-    });
-
     const { data, error } = await supabase
       .from('products')
-      .insert(productsToInsert)
+      .insert(products)
       .select();
 
     if (error) {
