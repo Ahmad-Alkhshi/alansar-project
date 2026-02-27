@@ -36,7 +36,7 @@ export default function AdminRecipientsPage() {
     loadRecipients()
     const interval = setInterval(() => {
       loadRecipients()
-    }, 30000)
+    }, 5000) // تحديث كل 5 ثواني
     return () => clearInterval(interval)
   }, [])
 
