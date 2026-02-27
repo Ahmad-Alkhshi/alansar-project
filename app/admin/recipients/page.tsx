@@ -223,21 +223,14 @@ export default function AdminRecipientsPage() {
     if (!lastSeen) return { online: false, text: 'لم يتصل بعد', color: 'text-gray-400' };
     
     const now = new Date();
-    const lastSeenDate = new Date(lastSeen);
+    // إضافة Z إذا لم تكن موجودة (Supabase يرجع بدون timezone)
+    const lastSeenISO = lastSeen.endsWith('Z') ? lastSeen : lastSeen + 'Z';
+    const lastSeenDate = new Date(lastSeenISO);
     const diffMs = now.getTime() - lastSeenDate.getTime();
     const diffSeconds = Math.floor(diffMs / 1000);
     const diffMinutes = Math.floor(diffSeconds / 60);
     const diffHours = Math.floor(diffMinutes / 60);
     const diffDays = Math.floor(diffHours / 24);
-    
-    console.log('Online status check:', {
-      lastSeen,
-      now: now.toISOString(),
-      lastSeenDate: lastSeenDate.toISOString(),
-      diffSeconds,
-      diffMinutes,
-      diffHours
-    });
     
     if (diffSeconds < 30) {
       return { online: true, text: 'متصل الآن 🟢', color: 'text-green-600 font-bold' };
