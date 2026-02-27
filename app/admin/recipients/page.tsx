@@ -233,7 +233,7 @@ export default function AdminRecipientsPage() {
     const diffHours = Math.floor(diffMinutes / 60);
     const diffDays = Math.floor(diffHours / 24);
     
-    if (diffSeconds < 30) {
+    if (diffSeconds < 5) {
       return { online: true, text: 'متصل الآن 🟢', color: 'text-green-600 font-bold' };
     } else if (diffMinutes < 1) {
       return { online: false, text: `منذ ${diffSeconds} ثانية`, color: 'text-yellow-600' };
