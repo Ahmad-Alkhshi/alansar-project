@@ -52,6 +52,10 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      loadData();
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   async function loadData() {
@@ -102,7 +106,13 @@ export default function AdminOrdersPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-primary mb-8">الطلبات</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-primary">الطلبات</h1>
+          <div className="bg-white rounded-lg shadow px-6 py-3">
+            <span className="text-gray-600 ml-2">عدد المسجلين:</span>
+            <span className="text-2xl font-bold text-primary">{orders.length}</span>
+          </div>
+        </div>
 
         {/* إعدادات مهلة التعديل */}
         {/* <div className="bg-white rounded-lg shadow p-6 mb-6">

@@ -10,7 +10,7 @@ interface Product {
   price: number;
   stock: number;
   imageUrl: string | null;
-  maxQuantity?: number;
+  max_quantity?: number;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -45,6 +45,19 @@ export default function ClaimPage() {
     if (savedCart) {
       setLocalCart(JSON.parse(savedCart));
     }
+
+    // Heartbeat: إرسال تحديث كل 10 ثواني
+    const heartbeat = setInterval(async () => {
+      try {
+        await fetch(`${API_URL}/recipients/heartbeat/${token}`, {
+          method: 'POST'
+        });
+      } catch (err) {
+        console.error('Heartbeat failed:', err);
+      }
+    }, 10000);
+
+    return () => clearInterval(heartbeat);
   }, []);
 
   async function loadData(skipLoading = false) {
@@ -719,7 +732,7 @@ export default function ClaimPage() {
           {products.map((product) => {
             const quantity = getCartQuantity(product.id);
             const checkResult = canAddProduct(product.price);
-            const maxQty = product.maxQuantity || 10;
+            const maxQty = product.max_quantity || 10;
             const isDisabled = !checkResult.allowed || canSubmitOrder || quantity >= maxQty;
 
             return (

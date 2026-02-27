@@ -25,6 +25,23 @@ router.post('/reset-order/:token', async (req, res) => {
   }
 });
 
+router.post('/heartbeat/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const { error } = await supabase
+      .from('recipients')
+      .update({ last_seen: new Date().toISOString() })
+      .eq('token', token);
+    
+    if (error) throw error;
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل في التحديث' });
+  }
+});
+
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;

@@ -17,6 +17,7 @@ interface Recipient {
   linkDurationDays: number
   linkActive: boolean
   gender?: string
+  last_seen?: string
 }
 
 export default function AdminRecipientsPage() {
@@ -33,6 +34,10 @@ export default function AdminRecipientsPage() {
 
   useEffect(() => {
     loadRecipients()
+    const interval = setInterval(() => {
+      loadRecipients()
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadRecipients() {
@@ -43,7 +48,8 @@ export default function AdminRecipientsPage() {
         basketLimit: r.basket_limit || r.basketLimit || 500000,
         linkDurationDays: r.link_duration_days || r.linkDurationDays || 2,
         linkActive: r.link_active !== undefined ? r.link_active : (r.linkActive !== undefined ? r.linkActive : true),
-        gender: r.gender || 'male'
+        gender: r.gender || 'male',
+        last_seen: r.last_seen
       }))
       setRecipients(recipients)
     } catch (error) {
@@ -211,6 +217,30 @@ export default function AdminRecipientsPage() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'نموذج')
     XLSX.writeFile(wb, 'نموذج_استيراد.xlsx')
+  }
+
+  function getOnlineStatus(lastSeen?: string) {
+    if (!lastSeen) return { online: false, text: 'لم يتصل بعد', color: 'text-gray-400' };
+    
+    const now = new Date();
+    const lastSeenDate = new Date(lastSeen);
+    const diffMs = now.getTime() - lastSeenDate.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffSeconds < 30) {
+      return { online: true, text: 'متصل الآن 🟢', color: 'text-green-600 font-bold' };
+    } else if (diffMinutes < 1) {
+      return { online: false, text: `منذ ${diffSeconds} ثانية`, color: 'text-yellow-600' };
+    } else if (diffMinutes < 60) {
+      return { online: false, text: `منذ ${diffMinutes} دقيقة`, color: 'text-yellow-600' };
+    } else if (diffHours < 24) {
+      return { online: false, text: `منذ ${diffHours} ساعة`, color: 'text-orange-600' };
+    } else {
+      return { online: false, text: `منذ ${diffDays} يوم`, color: 'text-gray-500' };
+    }
   }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -444,12 +474,15 @@ export default function AdminRecipientsPage() {
                 <th className="p-4 text-right">الجنس</th>
                 <th className="p-4 text-right">قيمة السلة</th>
                 <th className="p-4 text-right">حالة الرابط</th>
+                <th className="p-4 text-right">الحالة</th>
                 {/* <th className="p-4 text-right">الحالة</th> */}
                 <th className="p-4 text-right">الرابط</th>
               </tr>
             </thead>
             <tbody>
-              {recipients.map(recipient => (
+              {recipients.map(recipient => {
+                const status = getOnlineStatus(recipient.last_seen);
+                return (
                 <tr key={recipient.id} className="border-b hover:bg-gray-50">
                   <td className="p-4">
                     <input
@@ -471,6 +504,9 @@ export default function AdminRecipientsPage() {
                       {recipient.linkActive ? 'مفعّل' : 'ملغى'}
                     </button>
                   </td>
+                  <td className="p-4">
+                    <span className={status.color}>{status.text}</span>
+                  </td>
                   {/* <td className="p-4">
                     <span className={`px-3 py-1 rounded ${recipient.orderSubmitted ? 'bg-success text-white' : 'bg-warning text-white'}`}>
                       {recipient.orderSubmitted ? 'تم الإرسال' : 'لم يرسل'}
@@ -491,7 +527,7 @@ export default function AdminRecipientsPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

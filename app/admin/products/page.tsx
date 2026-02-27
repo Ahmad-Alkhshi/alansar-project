@@ -128,6 +128,10 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     loadProducts()
+    const interval = setInterval(() => {
+      loadProducts()
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadProducts() {
