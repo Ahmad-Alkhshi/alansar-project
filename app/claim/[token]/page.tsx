@@ -35,6 +35,8 @@ export default function ClaimPage() {
     active: true,
     expired: false,
   });
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -45,9 +47,11 @@ export default function ClaimPage() {
     }
   }, []);
 
-  async function loadData() {
+  async function loadData(skipLoading = false) {
     try {
-      setLoading(true);
+      if (!skipLoading) {
+        setLoading(true);
+      }
 
       const productsData = await api.getProducts();
       setProducts(productsData);
@@ -257,7 +261,8 @@ export default function ClaimPage() {
   async function submitOrder() {
     try {
       setError("");
-      setLoading(true);
+      setShowUploadProgress(true);
+      setUploadProgress(0);
 
       const isEditMode = !!existingOrder;
 
@@ -276,9 +281,13 @@ export default function ClaimPage() {
         setExistingOrder(null);
       }
 
+      setUploadProgress(25);
+
       await fetch(`${API_URL}/cart/clear?token=${token}`, {
         method: "DELETE",
       });
+
+      setUploadProgress(50);
 
       const items = Object.entries(localCart).map(([productId, quantity]) => ({
         productId,
@@ -294,15 +303,17 @@ export default function ClaimPage() {
       const bulkData = await bulkRes.json();
       if (!bulkRes.ok) {
         setError(bulkData.error || "فشل في إضافة المنتجات");
-        setLoading(false);
+        setShowUploadProgress(false);
         return;
       }
+
+      setUploadProgress(75);
 
       const data = await api.submitOrder(token);
 
       if (data.error) {
         setError(data.error);
-        setLoading(false);
+        setShowUploadProgress(false);
         return;
       }
 
@@ -310,14 +321,18 @@ export default function ClaimPage() {
         await api.requestEdit(token, "تعديل الطلب");
       }
 
+      setUploadProgress(100);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       localStorage.removeItem(`cart_${token}`);
       setOrderSubmitted(true);
-      await loadData();
+      await loadData(true);
+      setShowUploadProgress(false);
     } catch (err) {
       console.error('Submit error:', err);
       setError("فشل في تأكيد الطلب");
-    } finally {
-      setLoading(false);
+      setShowUploadProgress(false);
     }
   }
 
@@ -410,7 +425,7 @@ export default function ClaimPage() {
   // التحقق من إمكانية رفع الطلب: لازم يكون وصل للحد أو تجاوزه بشكل صحيح
   const canSubmitOrder = cartTotal >= baseLimit && isMarginAllowed;
 
-  if (loading) {
+  if (loading && !showUploadProgress) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-2xl text-gray-600">جاري التحميل...</div>
@@ -418,11 +433,68 @@ export default function ClaimPage() {
     );
   }
 
+  if (showUploadProgress) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" dir="rtl">
+        <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+          <div className="text-center mb-6">
+            <div className="text-2xl font-bold text-primary mb-2">
+              {uploadProgress === 100 ? '✓ تم رفع الطلب بنجاح' : 'جاري رفع الطلب'}
+            </div>
+            <p className="text-gray-600">
+              {uploadProgress === 100 
+                ? 'سيتم تحويلك لصفحة الطلب...'
+                : 'انتظر عدة ثوان لانتهاء التحميل وضمان رفع الطلب بشكل صحيح'
+              }
+            </p>
+          </div>
+          
+          <div className="mb-4">
+            <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
+              <div 
+                className="bg-success h-full transition-all duration-500 flex items-center justify-center text-white font-bold text-sm"
+                style={{ width: `${uploadProgress}%` }}
+              >
+                {uploadProgress}%
+              </div>
+            </div>
+          </div>
+
+          {/* {uploadProgress === 100 && (
+            <div className="text-center text-success font-bold text-xl animate-pulse">
+              ✓
+            </div>
+          )} */}
+        </div>
+      </div>
+    );
+  }
+
   if (orderSubmitted) {
     if (!existingOrder) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="text-2xl text-gray-600">جاري تحميل الطلب...</div>
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" dir="rtl">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <div className="text-center mb-6">
+              <div className="text-2xl font-bold text-primary mb-2">
+                ✓ تم رفع الطلب بنجاح
+              </div>
+              <p className="text-gray-600">
+                سيتم تحويلك لصفحة الطلب...
+              </p>
+            </div>
+            
+            <div className="mb-4">
+              <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
+                <div 
+                  className="bg-success h-full transition-all duration-500 flex items-center justify-center text-white font-bold text-sm"
+                  style={{ width: "100%" }}
+                >
+                  100%
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
@@ -686,22 +758,19 @@ export default function ClaimPage() {
         </div>
 
         {canSubmitOrder && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-primary p-4 shadow-lg">
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-success p-4 shadow-2xl">
             <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-2 animate-bounce">
+                <p className="text-xl font-bold text-success">
+                  👇 اضغط هنا لاعتماد الطلب 👇
+                </p>
+              </div>
               <button
                 onClick={submitOrder}
                 disabled={!canSubmitOrder}
-                className={`w-full text-2xl font-bold py-4 rounded-lg ${
-                  canSubmitOrder
-                    ? "bg-success text-white hover:opacity-90"
-                    : "bg-gray-400 text-white opacity-50 cursor-not-allowed"
-                }`}
+                className="w-full text-2xl font-bold py-6 rounded-lg bg-success text-white hover:opacity-90 shadow-lg transform hover:scale-105 transition-all"
               >
-                {canSubmitOrder
-                  ? `اعتماد الطلب (${cartItemsCount} منتج - بقيمة ${baseLimit.toLocaleString("en-US")} )`
-                  : cartTotal < baseLimit
-                    ? `لازم تكمل للحد المطلوب (${baseLimit.toLocaleString("en-US")} )`
-                    : "لا يمكن رفع الطلب - تجاوز الحد المسموح"}
+                ✓ اعتماد الطلب ({cartItemsCount} منتج - بقيمة {baseLimit.toLocaleString("en-US")} )
               </button>
             </div>
           </div>
