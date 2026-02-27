@@ -23,6 +23,8 @@ export default function ReportsPage() {
   const [defaultBaskets, setDefaultBaskets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [reportType, setReportType] = useState<'collective' | 'individual'>('collective')
+  const [sortField, setSortField] = useState<'name' | 'quantity'>('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     loadOrders()
@@ -233,6 +235,28 @@ export default function ReportsPage() {
   }
 
   const collectiveReport = getCollectiveReport()
+  
+  // ترتيب التقرير الجماعي
+  const sortedReport = [...collectiveReport].sort((a, b) => {
+    if (sortField === 'name') {
+      return sortOrder === 'asc' 
+        ? a.name.localeCompare(b.name, 'ar')
+        : b.name.localeCompare(a.name, 'ar')
+    } else {
+      return sortOrder === 'asc'
+        ? a.quantity - b.quantity
+        : b.quantity - a.quantity
+    }
+  })
+
+  function toggleSort(field: 'name' | 'quantity') {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
@@ -285,13 +309,33 @@ export default function ReportsPage() {
             <table className="w-full">
               <thead className="bg-primary text-white">
                 <tr>
-                  <th className="p-4 text-right">المادة</th>
+                  <th className="p-4 text-right">
+                    <button 
+                      onClick={() => toggleSort('name')}
+                      className="flex items-center gap-2 hover:opacity-80"
+                    >
+                      المادة
+                      {sortField === 'name' && (
+                        <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </button>
+                  </th>
                   <th className="p-4 text-right">الكمية</th>
-                  <th className="p-4 text-right">الكمية المطلوبة</th>
+                  <th className="p-4 text-right">
+                    <button 
+                      onClick={() => toggleSort('quantity')}
+                      className="flex items-center gap-2 hover:opacity-80"
+                    >
+                      الكمية المطلوبة
+                      {sortField === 'quantity' && (
+                        <span>{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {collectiveReport.map((item, idx) => (
+                {sortedReport.map((item, idx) => (
                   <tr key={idx} className="border-b hover:bg-gray-50">
                     <td className="p-4 text-lg">{item.name}</td>
                     <td className="p-4 text-lg">{item.unit}</td>
