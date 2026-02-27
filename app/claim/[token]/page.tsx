@@ -672,7 +672,7 @@ export default function ClaimPage() {
     <div className="min-h-screen bg-gray-50" dir="rtl">
       <div className="bg-primary text-white py-6 px-4 shadow-lg">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-base mb-2">يرجى من {recipientGender === 'female' ? 'السيدة' : 'السيد'} <span className="font-bold text-lg">{recipientName}</span> اختيار المواد الغذائية التي تحتاجها اسرتها</h1>
+          <h1 className="text-base mb-2">  يرجى من <span className="font-bold text-lg">{recipientName}</span> اختيار المواد الغذائية التي تحتاجها اسرتها</h1>
           {/* <p className="text-xl">يرجى اختيار السلة الغذائية التي تحتاجها الأسرة</p> */}
         </div>
       </div>

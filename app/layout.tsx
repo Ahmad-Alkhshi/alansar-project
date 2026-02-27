@@ -5,8 +5,8 @@ import './globals.css'
 const cairo = Cairo({ subsets: ['arabic'] })
 
 export const metadata: Metadata = {
-  title: 'نظام توزيع السلات الغذائية',
-  description: 'نظام إلكتروني لإدارة توزيع السلات الغذائية',
+  title: 'جمعية الأنصار الخيرية',
+  description: 'نظام إلكتروني لإدارة توزيع سلات رمضان الغذائية',
 }
 
 export default function RootLayout({
