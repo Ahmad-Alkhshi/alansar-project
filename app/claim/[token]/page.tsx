@@ -46,8 +46,8 @@ export default function ClaimPage() {
       setLocalCart(JSON.parse(savedCart));
     }
 
-    // Heartbeat: إرسال تحديث كل 10 ثواني
-    const heartbeat = setInterval(async () => {
+    // إرسال heartbeat فوري عند فتح الصفحة
+    const sendHeartbeat = async () => {
       try {
         await fetch(`${API_URL}/recipients/heartbeat/${token}`, {
           method: 'POST'
@@ -55,7 +55,12 @@ export default function ClaimPage() {
       } catch (err) {
         console.error('Heartbeat failed:', err);
       }
-    }, 10000);
+    };
+
+    sendHeartbeat(); // إرسال فوري
+
+    // Heartbeat: إرسال تحديث كل 10 ثواني
+    const heartbeat = setInterval(sendHeartbeat, 10000);
 
     return () => clearInterval(heartbeat);
   }, []);
