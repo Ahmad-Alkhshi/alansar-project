@@ -31,9 +31,10 @@ interface Product {
   imageUrl: string | null
   isActive: boolean
   display_order?: number
+  maxQuantity?: number
 }
 
-function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisibility, deleteProduct }: any) {
+function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisibility, deleteProduct, updateMaxQuantity, handleEdit }: any) {
   const {
     attributes,
     listeners,
@@ -63,6 +64,16 @@ function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisib
       <td className="p-4 text-lg">{product.name}</td>
       <td className="p-4 text-lg font-bold">{product.price.toLocaleString('ar-SY')} </td>
       <td className="p-4">
+        <input
+          type="number"
+          min="1"
+          max="99"
+          value={product.maxQuantity || 10}
+          onChange={(e) => updateMaxQuantity(product.id, Number(e.target.value))}
+          className="border-2 border-gray-300 rounded px-2 py-1 w-16 text-center"
+        />
+      </td>
+      <td className="p-4">
         <span className={`px-3 py-1 rounded text-white ${product.isActive ? 'bg-success' : 'bg-gray-400'}`}>
           {product.isActive ? 'ظاهر' : 'مخفي'}
         </span>
@@ -75,6 +86,12 @@ function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisib
             title={product.isActive ? 'إخفاء' : 'إظهار'}
           >
             {product.isActive ? '👁️' : '👁️🗨️'}
+          </button>
+          <button
+            onClick={() => handleEdit(product)}
+            className="bg-warning text-white px-4 py-2 rounded hover:opacity-90"
+          >
+            تعديل
           </button>
           <button
             onClick={() => deleteProduct(product.id)}
@@ -94,11 +111,15 @@ export default function AdminProductsPage() {
   const [showForm, setShowForm] = useState(false)
   const [importing, setImporting] = useState(false)
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     quantity: '',
     price: '',
+    maxQuantity: '10'
   })
+  const [progress, setProgress] = useState({ current: 0, total: 0, message: '' })
+  const [showProgress, setShowProgress] = useState(false)
 
   useEffect(() => {
     loadProducts()
@@ -111,12 +132,13 @@ export default function AdminProductsPage() {
       const products = data.map((p: any) => ({
         ...p,
         isActive: p.is_active,
-        display_order: p.display_order || 0
+        display_order: p.display_order || 0,
+        maxQuantity: p.max_quantity || 10
       }))
       setProducts(products)
     } catch (error) {
       console.error('Load error:', error)
-      alert('فشل في تحميل المنتجات')
+      alert('فشل في تحميل المواد')
     } finally {
       setLoading(false)
     }
@@ -125,17 +147,39 @@ export default function AdminProductsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      await api.createProduct({
-        name: `${formData.name} - ${formData.quantity}`,
-        price: parseInt(formData.price),
-        stock: 999,
-      })
-      setFormData({ name: '', quantity: '', price: '' })
+      if (editingProduct) {
+        await api.updateProduct(editingProduct.id, {
+          name: `${formData.name} - ${formData.quantity}`,
+          price: parseInt(formData.price),
+          maxQuantity: parseInt(formData.maxQuantity)
+        })
+      } else {
+        await api.createProduct({
+          name: `${formData.name} - ${formData.quantity}`,
+          price: parseInt(formData.price),
+          stock: 999,
+          maxQuantity: parseInt(formData.maxQuantity)
+        })
+      }
+      setFormData({ name: '', quantity: '', price: '', maxQuantity: '10' })
+      setEditingProduct(null)
       setShowForm(false)
       loadProducts()
     } catch (error) {
-      alert('فشل في إضافة المنتج')
+      alert('فشل في حفظ المنتج')
     }
+  }
+
+  function handleEdit(product: Product) {
+    const [name, quantity] = product.name.split(' - ')
+    setEditingProduct(product)
+    setFormData({
+      name: name || '',
+      quantity: quantity || '',
+      price: product.price.toString(),
+      maxQuantity: (product.maxQuantity || 10).toString()
+    })
+    setShowForm(true)
   }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -153,24 +197,38 @@ export default function AdminProductsPage() {
         const sheet = workbook.Sheets[sheetName]
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
         
+        const products = []
         for (let i = 1; i < rows.length; i++) {
-          const [name, quantity, price] = rows[i]
-          
+          const [name, quantity, price, maxQuantity] = rows[i]
           if (name && quantity && price) {
-            await api.createProduct({
+            products.push({
               name: `${name} - ${quantity}`,
               price: parseInt(price),
               stock: 999,
+              is_active: true,
+              maxQuantity: maxQuantity ? parseInt(maxQuantity) : 10
             })
           }
         }
         
-        alert('تم استيراد المنتجات بنجاح!')
+        setShowProgress(true)
+        setProgress({ current: 0, total: products.length, message: 'جاري الاستيراد...' })
+        
+        await fetch(`${API_URL}/products/bulk-create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products })
+        })
+        
+        setProgress({ current: products.length, total: products.length, message: `تم إضافة ${products.length} منتج` })
+        
+        alert('تم استيراد المواد بنجاح!')
         loadProducts()
       } catch (error) {
-        alert('فشل في استيراد المنتجات')
+        alert('فشل في استيراد المواد')
       } finally {
         setImporting(false)
+        setShowProgress(false)
         e.target.value = ''
       }
     }
@@ -199,6 +257,15 @@ export default function AdminProductsPage() {
     }
   }
 
+  async function updateMaxQuantity(id: string, maxQuantity: number) {
+    try {
+      await api.updateProduct(id, { maxQuantity })
+      loadProducts()
+    } catch (error) {
+      alert('فشل في تحديث الحد الأقصى')
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelectedProducts(prev => 
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
@@ -222,7 +289,7 @@ export default function AdminProductsPage() {
       setSelectedProducts([])
       loadProducts()
     } catch (error) {
-      alert('فشل في إخفاء المنتجات')
+      alert('فشل في إخفاء المواد')
     }
   }
 
@@ -235,32 +302,51 @@ export default function AdminProductsPage() {
       setSelectedProducts([])
       loadProducts()
     } catch (error) {
-      alert('فشل في إظهار المنتجات')
+      alert('فشل في إظهار المواد')
     }
   }
 
   async function bulkDelete() {
     if (selectedProducts.length === 0) return
     if (!confirm(`هل أنت متأكد من حذف ${selectedProducts.length} منتج؟`)) return
+    
+    setShowProgress(true)
+    setProgress({ current: 0, total: selectedProducts.length, message: 'جاري الحذف...' })
+    
     try {
-      for (const id of selectedProducts) {
-        await api.deleteProduct(id)
+      const res = await fetch(`${API_URL}/products/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedProducts })
+      })
+      
+      const data = await res.json()
+      console.log('Bulk delete response:', data)
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'فشل في الحذف')
       }
+      
+      setProgress({ current: selectedProducts.length, total: selectedProducts.length, message: `تم حذف ${selectedProducts.length} منتج` })
       setSelectedProducts([])
-      loadProducts()
+      await loadProducts()
+      alert('تم الحذف بنجاح!')
     } catch (error) {
-      alert('فشل في حذف المنتجات')
+      console.error('Bulk delete error:', error)
+      alert('فشل في حذف المواد: ' + error)
+    } finally {
+      setShowProgress(false)
     }
   }
 
   function downloadTemplate() {
     const template = [
-      { 'اسم المادة': 'رز', 'الكمية': '1 كيلو', 'السعر': '45000' }
+      { 'اسم المادة': 'رز', 'الكمية': '1 كيلو', 'السعر': '45000', 'الحد الأقصى': '10' }
     ]
     const ws = XLSX.utils.json_to_sheet(template)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'نموذج')
-    XLSX.writeFile(wb, 'نموذج_المنتجات.xlsx')
+    XLSX.writeFile(wb, 'نموذج_المواد.xlsx')
   }
 
   const sensors = useSensors(
@@ -300,9 +386,28 @@ export default function AdminProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
+      {showProgress && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4 text-center">{progress.message}</h3>
+            <div className="w-full bg-gray-200 rounded-full h-6 mb-4">
+              <div 
+                className="bg-primary h-6 rounded-full transition-all duration-300 flex items-center justify-center text-white font-bold"
+                style={{ width: `${(progress.current / progress.total) * 100}%` }}
+              >
+                {Math.round((progress.current / progress.total) * 100)}%
+              </div>
+            </div>
+            <p className="text-center text-lg font-bold">
+              {progress.current} / {progress.total}
+            </p>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-primary">إدارة المنتجات</h1>
+          <h1 className="text-3xl font-bold text-primary">إدارة المواد</h1>
           <div className="flex gap-3">
             <button
               onClick={downloadTemplate}
@@ -321,7 +426,13 @@ export default function AdminProductsPage() {
               />
             </label>
             <button
-              onClick={() => setShowForm(!showForm)}
+              onClick={() => {
+                setShowForm(!showForm)
+                if (showForm) {
+                  setEditingProduct(null)
+                  setFormData({ name: '', quantity: '', price: '', maxQuantity: '10' })
+                }
+              }}
               className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark"
             >
               {showForm ? 'إلغاء' : 'إضافة منتج'}
@@ -331,7 +442,8 @@ export default function AdminProductsPage() {
 
         {showForm && (
           <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg mb-8">
-            <div className="grid grid-cols-3 gap-4">
+            <h3 className="text-xl font-bold mb-4">{editingProduct ? 'تعديل منتج' : 'إضافة منتج'}</h3>
+            <div className="grid grid-cols-4 gap-4">
               <input
                 type="text"
                 placeholder="اسم المادة (مثال: رز)"
@@ -354,6 +466,15 @@ export default function AdminProductsPage() {
                 value={formData.price}
                 onChange={e => setFormData({ ...formData, price: e.target.value })}
                 required
+                className="border p-3 rounded text-lg"
+              />
+              <input
+                type="number"
+                placeholder="الحد الأقصى للكمية"
+                value={formData.maxQuantity}
+                onChange={e => setFormData({ ...formData, maxQuantity: e.target.value })}
+                required
+                min="1"
                 className="border p-3 rounded text-lg"
               />
             </div>
@@ -412,6 +533,7 @@ export default function AdminProductsPage() {
                   <th className="p-4 text-right">ترتيب</th>
                   <th className="p-4 text-right">المادة</th>
                   <th className="p-4 text-right">السعر</th>
+                  <th className="p-4 text-right">الحد الأقصى</th>
                   <th className="p-4 text-right">الحالة</th>
                   <th className="p-4 text-right">إجراءات</th>
                 </tr>
@@ -429,6 +551,8 @@ export default function AdminProductsPage() {
                       isSelected={selectedProducts.includes(product.id)}
                       toggleProductVisibility={toggleProductVisibility}
                       deleteProduct={deleteProduct}
+                      updateMaxQuantity={updateMaxQuantity}
+                      handleEdit={handleEdit}
                     />
                   ))}
                 </SortableContext>

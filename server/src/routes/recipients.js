@@ -69,7 +69,7 @@ router.post('/bulk-delete', async (req, res) => {
     
     console.log('Bulk delete request:', ids.length, 'recipients');
     
-    const batchSize = 50;
+    const batchSize = 30;
     let deleted = 0;
     
     // تقسيم لدفعات

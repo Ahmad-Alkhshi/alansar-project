@@ -209,7 +209,7 @@ export default function AdminOrdersPage() {
                   </div>
 
                   <div className="border-t pt-4">
-                    <h4 className="font-bold mb-3">المنتجات:</h4>
+                    <h4 className="font-bold mb-3">المواد:</h4>
                     <div className="space-y-2">
                       {order.order_items.map(
                         (item, idx) => (

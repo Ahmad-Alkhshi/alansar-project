@@ -36,7 +36,7 @@ Server سيعمل على: `http://localhost:5000`
 ## API Endpoints
 
 ### Products
-- `GET /api/products` - جلب جميع المنتجات
+- `GET /api/products` - جلب جميع المواد
 - `POST /api/products` - إضافة منتج
 - `PUT /api/products/:id` - تحديث منتج
 - `DELETE /api/products/:id` - حذف منتج

@@ -74,7 +74,7 @@ export default function DefaultBasketsPage() {
       setSelectedProducts({})
       loadData()
     } catch (error) {
-      alert('فشل في حفظ المنتجات')
+      alert('فشل في حفظ المواد')
     }
   }
 
@@ -138,7 +138,7 @@ export default function DefaultBasketsPage() {
                   onClick={() => startEdit(basket)}
                   className="bg-warning text-white px-4 py-2 rounded-lg hover:opacity-90"
                 >
-                  تعديل المنتجات
+                  تعديل المواد
                 </button>
               </div>
 

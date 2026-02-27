@@ -13,7 +13,7 @@ export const getProducts = async (req, res) => {
 
     res.json(data);
   } catch (error) {
-    res.status(500).json({ error: 'فشل في جلب المنتجات' });
+    res.status(500).json({ error: 'فشل في جلب المواد' });
   }
 };
 

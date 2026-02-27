@@ -10,6 +10,7 @@ interface Product {
   price: number;
   stock: number;
   imageUrl: string | null;
+  maxQuantity?: number;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -21,6 +22,7 @@ export default function ClaimPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [localCart, setLocalCart] = useState<{ [key: string]: number }>({});
   const [recipientName, setRecipientName] = useState("");
+  const [recipientGender, setRecipientGender] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -36,6 +38,11 @@ export default function ClaimPage() {
 
   useEffect(() => {
     loadData();
+    // استرجاع السلة من localStorage
+    const savedCart = localStorage.getItem(`cart_${token}`);
+    if (savedCart) {
+      setLocalCart(JSON.parse(savedCart));
+    }
   }, []);
 
   async function loadData() {
@@ -72,6 +79,7 @@ export default function ClaimPage() {
       // إذا الرابط ملغى أو منتهي
       if (!linkActive || linkExpired) {
         setRecipientName(cartData.recipient.name);
+        setRecipientGender(cartData.recipient.gender || 'male');
         setOrderSubmitted(true);
 
         // إذا ما في طلب = سلة افتراضية
@@ -139,6 +147,7 @@ export default function ClaimPage() {
       }
 
       setRecipientName(cartData.recipient.name);
+      setRecipientGender(cartData.recipient.gender || 'male');
       setOrderSubmitted(cartData.recipient.orderSubmitted);
       setBaseLimit(
         cartData.recipient.basket_limit ||
@@ -192,22 +201,24 @@ export default function ClaimPage() {
     const checkResult = canAddProduct(product.price);
 
     if (!checkResult.allowed) {
-      return; // الزر معطل أصلاً
+      return;
     }
 
     if (checkResult.needsRemoval && checkResult.removableItems.length > 0) {
-      // إظهار القائمة المنبثقة
       setPendingProduct(productId);
       setRemovableProducts(checkResult.removableItems);
       setShowRemovalPopup(true);
       return;
     }
 
-    // إضافة عادية
-    setLocalCart((prev) => ({
-      ...prev,
-      [productId]: (prev[productId] || 0) + 1,
-    }));
+    setLocalCart((prev) => {
+      const newCart = {
+        ...prev,
+        [productId]: (prev[productId] || 0) + 1,
+      };
+      localStorage.setItem(`cart_${token}`, JSON.stringify(newCart));
+      return newCart;
+    });
   }
 
   function removeFromCart(productId: string) {
@@ -219,23 +230,25 @@ export default function ClaimPage() {
       } else {
         delete newCart[productId];
       }
+      localStorage.setItem(`cart_${token}`, JSON.stringify(newCart));
       return newCart;
     });
   }
 
   function handleRemoveAndAdd(removeId: string) {
-    // حذف المنتج القديم
     removeFromCart(removeId);
 
-    // إضافة المنتج الجديد
     if (pendingProduct) {
-      setLocalCart((prev) => ({
-        ...prev,
-        [pendingProduct]: (prev[pendingProduct] || 0) + 1,
-      }));
+      setLocalCart((prev) => {
+        const newCart = {
+          ...prev,
+          [pendingProduct]: (prev[pendingProduct] || 0) + 1,
+        };
+        localStorage.setItem(`cart_${token}`, JSON.stringify(newCart));
+        return newCart;
+      });
     }
 
-    // إغلاق القائمة
     setShowRemovalPopup(false);
     setPendingProduct(null);
     setRemovableProducts([]);
@@ -267,13 +280,22 @@ export default function ClaimPage() {
         method: "DELETE",
       });
 
-      for (const [productId, quantity] of Object.entries(localCart)) {
-        const res = await api.addToCart(token, productId, quantity);
-        if (res.error) {
-          setError(res.error);
-          setLoading(false);
-          return;
-        }
+      const items = Object.entries(localCart).map(([productId, quantity]) => ({
+        productId,
+        quantity
+      }));
+
+      const bulkRes = await fetch(`${API_URL}/cart/bulk-add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, items })
+      });
+
+      const bulkData = await bulkRes.json();
+      if (!bulkRes.ok) {
+        setError(bulkData.error || "فشل في إضافة المنتجات");
+        setLoading(false);
+        return;
       }
 
       const data = await api.submitOrder(token);
@@ -288,6 +310,7 @@ export default function ClaimPage() {
         await api.requestEdit(token, "تعديل الطلب");
       }
 
+      localStorage.removeItem(`cart_${token}`);
       setOrderSubmitted(true);
       await loadData();
     } catch (err) {
@@ -342,7 +365,7 @@ export default function ClaimPage() {
           ? { id: p.id, name: p.name, price: p.price, quantity: qty }
           : null;
       })
-      .filter((item) => item && item.price <= extra); // المنتجات اللي سعرها <= الفرق
+      .filter((item) => item && item.price <= extra); // المواد اللي سعرها <= الفرق
 
     return { allowed: true, needsRemoval: true, removableItems: itemsToRemove };
   }
@@ -517,7 +540,7 @@ export default function ClaimPage() {
               </div>
 
               <div className="border-t pt-4">
-                <h4 className="font-bold mb-3">المنتجات:</h4>
+                <h4 className="font-bold mb-3">المواد:</h4>
                 <div className="space-y-2">
                   {(existingOrder.order_items || existingOrder.items || []).map(
                     (item: any, idx: number) => (
@@ -577,7 +600,7 @@ export default function ClaimPage() {
     <div className="min-h-screen bg-gray-50" dir="rtl">
       <div className="bg-primary text-white py-6 px-4 shadow-lg">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-base mb-2">يرجى من السيدة <span className="font-bold text-lg">{recipientName}</span> اختيار المواد الغذائية التي تحتاجها اسرتها</h1>
+          <h1 className="text-base mb-2">يرجى من {recipientGender === 'female' ? 'السيدة' : 'السيد'} <span className="font-bold text-lg">{recipientName}</span> اختيار المواد الغذائية التي تحتاجها اسرتها</h1>
           {/* <p className="text-xl">يرجى اختيار السلة الغذائية التي تحتاجها الأسرة</p> */}
         </div>
       </div>
@@ -624,7 +647,8 @@ export default function ClaimPage() {
           {products.map((product) => {
             const quantity = getCartQuantity(product.id);
             const checkResult = canAddProduct(product.price);
-            const isDisabled = !checkResult.allowed || canSubmitOrder;
+            const maxQty = product.maxQuantity || 10;
+            const isDisabled = !checkResult.allowed || canSubmitOrder || quantity >= maxQty;
 
             return (
               <div
@@ -694,7 +718,7 @@ export default function ClaimPage() {
                 <span className="font-bold text-primary">
                   {products.find((p) => p.id === pendingProduct)?.name}
                 </span>
-                ، يجب حذف أحد المنتجات التالية:
+                ، يجب حذف أحد المواد التالية:
               </p>
 
               <div className="space-y-3 mb-6 overflow-y-auto flex-1">

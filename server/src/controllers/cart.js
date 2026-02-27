@@ -284,3 +284,90 @@ export const clearCart = async (req, res) => {
     res.status(500).json({ error: 'فشل في حذف السلة' });
   }
 };
+
+export const bulkAddToCart = async (req, res) => {
+  try {
+    const { token, items } = req.body;
+
+    if (!token || !items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'بيانات ناقصة' });
+    }
+
+    const { data: recipient } = await supabase
+      .from('recipients')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (!recipient) {
+      return res.status(404).json({ error: 'رابط غير صحيح' });
+    }
+
+    if (recipient.order_submitted) {
+      return res.status(400).json({ error: 'تم تأكيد الطلب مسبقاً' });
+    }
+
+    let { data: cart } = await supabase
+      .from('carts')
+      .select('*')
+      .eq('recipient_id', recipient.id)
+      .single();
+
+    if (!cart) {
+      const { data: newCart } = await supabase
+        .from('carts')
+        .insert([{ recipient_id: recipient.id }])
+        .select()
+        .single();
+      cart = newCart;
+    }
+
+    const cartItems = [];
+    let totalPrice = 0;
+
+    for (const item of items) {
+      const { productId, quantity } = item;
+
+      const { data: product } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', productId)
+        .single();
+
+      if (!product || !product.is_active) {
+        continue;
+      }
+
+      cartItems.push({
+        cart_id: cart.id,
+        product_id: productId,
+        quantity,
+        unit_price: product.price
+      });
+
+      totalPrice += product.price * quantity;
+    }
+
+    if (cartItems.length > 0) {
+      await supabase
+        .from('cart_items')
+        .insert(cartItems);
+
+      await supabase
+        .from('carts')
+        .update({ total: totalPrice })
+        .eq('id', cart.id);
+    }
+
+    const { data: updatedCart } = await supabase
+      .from('carts')
+      .select('*, cart_items(*, products(*))')
+      .eq('id', cart.id)
+      .single();
+
+    res.json({ cart: updatedCart });
+  } catch (error) {
+    console.error('Bulk add error:', error);
+    res.status(500).json({ error: 'فشل في إضافة المنتجات' });
+  }
+};

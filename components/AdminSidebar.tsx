@@ -9,7 +9,7 @@ export default function AdminSidebar() {
 
   const links = [
     { href: '/admin', label: 'لوحة التحكم', icon: '🏠' },
-    { href: '/admin/products', label: 'المنتجات', icon: '📦' },
+    { href: '/admin/products', label: 'المواد', icon: '📦' },
     { href: '/admin/recipients', label: 'المستفيدين', icon: '👥' },
     { href: '/admin/orders', label: 'الطلبات', icon: '📋' },
     { href: '/admin/default-baskets', label: 'السلال الافتراضية', icon: '🧺' },

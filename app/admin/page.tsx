@@ -16,8 +16,8 @@ export default function AdminPage() {
           <Link href="/admin/products">
             <div className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition cursor-pointer">
               <div className="text-5xl mb-4 text-primary">📦</div>
-              <h2 className="text-2xl font-bold mb-2">المنتجات</h2>
-              <p className="text-gray-600">إدارة المنتجات والمخزون</p>
+              <h2 className="text-2xl font-bold mb-2">المواد</h2>
+              <p className="text-gray-600">إدارة المواد والمخزون</p>
             </div>
           </Link>
 

@@ -16,6 +16,7 @@ interface Recipient {
   basketLimit: number
   linkDurationDays: number
   linkActive: boolean
+  gender?: string
 }
 
 export default function AdminRecipientsPage() {
@@ -25,8 +26,10 @@ export default function AdminRecipientsPage() {
   const [importing, setImporting] = useState(false)
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([])
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null)
-  const [formData, setFormData] = useState({ name: '', phone: '', basketLimit: '500000' })
+  const [formData, setFormData] = useState({ name: '', phone: '', basketLimit: '500000', gender: 'male' })
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  const [progress, setProgress] = useState({ current: 0, total: 0, message: '' })
+  const [showProgress, setShowProgress] = useState(false)
 
   useEffect(() => {
     loadRecipients()
@@ -39,7 +42,8 @@ export default function AdminRecipientsPage() {
         ...r,
         basketLimit: r.basket_limit || r.basketLimit || 500000,
         linkDurationDays: r.link_duration_days || r.linkDurationDays || 2,
-        linkActive: r.link_active !== undefined ? r.link_active : (r.linkActive !== undefined ? r.linkActive : true)
+        linkActive: r.link_active !== undefined ? r.link_active : (r.linkActive !== undefined ? r.linkActive : true),
+        gender: r.gender || 'male'
       }))
       setRecipients(recipients)
     } catch (error) {
@@ -60,7 +64,8 @@ export default function AdminRecipientsPage() {
           body: JSON.stringify({ 
             name: formData.name, 
             phone: formData.phone,
-            basketLimit: parseInt(formData.basketLimit)
+            basketLimit: parseInt(formData.basketLimit),
+            gender: formData.gender
           })
         })
         const data = await res.json()
@@ -76,11 +81,12 @@ export default function AdminRecipientsPage() {
           body: JSON.stringify({ 
             name: formData.name, 
             phone: formData.phone,
-            basketLimit: parseInt(formData.basketLimit)
+            basketLimit: parseInt(formData.basketLimit),
+            gender: formData.gender
           })
         })
       }
-      setFormData({ name: '', phone: '', basketLimit: '500000' })
+      setFormData({ name: '', phone: '', basketLimit: '500000', gender: 'male' })
       setShowForm(false)
       setEditingRecipient(null)
       loadRecipients()
@@ -95,7 +101,8 @@ export default function AdminRecipientsPage() {
     setFormData({
       name: recipient.name,
       phone: recipient.phone,
-      basketLimit: (recipient.basketLimit || 500000).toString()
+      basketLimit: (recipient.basketLimit || 500000).toString(),
+      gender: recipient.gender || 'male'
     })
     setShowForm(true)
   }
@@ -113,18 +120,7 @@ export default function AdminRecipientsPage() {
     }
   }
 
-  async function updateLinkDuration(id: string, days: number) {
-    try {
-      await fetch(`${API_URL}/recipients/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linkDurationDays: days })
-      })
-      loadRecipients()
-    } catch (error) {
-      alert('فشل في تحديث مدة الرابط')
-    }
-  }
+
 
   function copyLink(token: string) {
     const link = `${window.location.origin}/claim/${token}`
@@ -150,14 +146,42 @@ export default function AdminRecipientsPage() {
   async function bulkDelete() {
     if (selectedRecipients.length === 0) return
     if (!confirm(`هل أنت متأكد من حذف ${selectedRecipients.length} مستفيد؟`)) return
+    
+    setShowProgress(true)
+    setProgress({ current: 0, total: selectedRecipients.length, message: 'جاري الحذف...' })
+    
+    const BATCH_SIZE = 50
+    let deletedCount = 0
+    
     try {
-      for (const id of selectedRecipients) {
-        await fetch(`${API_URL}/recipients/${id}`, { method: 'DELETE' })
+      for (let i = 0; i < selectedRecipients.length; i += BATCH_SIZE) {
+        const batch = selectedRecipients.slice(i, i + BATCH_SIZE)
+        
+        const res = await fetch(`${API_URL}/recipients/bulk-delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: batch })
+        })
+        
+        const data = await res.json()
+        
+        if (!res.ok) {
+          throw new Error(data.error || 'فشل في الحذف')
+        }
+        
+        deletedCount += batch.length
+        setProgress({ current: deletedCount, total: selectedRecipients.length, message: `جاري الحذف... ${deletedCount}/${selectedRecipients.length}` })
       }
+      
+      setProgress({ current: selectedRecipients.length, total: selectedRecipients.length, message: `تم حذف ${selectedRecipients.length} مستفيد` })
       setSelectedRecipients([])
-      loadRecipients()
+      await loadRecipients()
+      alert('تم الحذف بنجاح!')
     } catch (error) {
-      alert('فشل في حذف المستفيدين')
+      console.error('Bulk delete error:', error)
+      alert(`فشل في حذف المستفيدين بعد حذف ${deletedCount} مستفيد: ` + error)
+    } finally {
+      setShowProgress(false)
     }
   }
 
@@ -175,6 +199,20 @@ export default function AdminRecipientsPage() {
     XLSX.writeFile(wb, 'قائمة_المستفيدين.xlsx')
   }
 
+  function downloadTemplate() {
+    const data = [{
+      'الاسم': '',
+      'رقم الملف': '',
+      'الجنس': 'ذكر',
+      'قيمة السلة': 500000
+    }]
+    
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'نموذج')
+    XLSX.writeFile(wb, 'نموذج_استيراد.xlsx')
+  }
+
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -190,21 +228,31 @@ export default function AdminRecipientsPage() {
         const sheet = workbook.Sheets[sheetName]
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
         
+        const recipients = []
         for (let i = 1; i < rows.length; i++) {
-          const [name, phone, basketLimit] = rows[i]
-          
+          const [name, phone, gender, basketLimit] = rows[i]
           if (name && phone) {
-            await fetch(`${API_URL}/recipients`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                name, 
-                phone: phone.toString(),
-                basketLimit: basketLimit ? parseInt(basketLimit) : 500000
-              })
+            const genderStr = gender ? String(gender).trim() : '';
+            const isFemale = genderStr === 'أنثى' || genderStr === 'انثى' || genderStr.toLowerCase() === 'female';
+            recipients.push({
+              name,
+              phone: phone.toString(),
+              gender: isFemale ? 'female' : 'male',
+              basketLimit: basketLimit ? parseInt(basketLimit) : 500000
             })
           }
         }
+        
+        setShowProgress(true)
+        setProgress({ current: 0, total: recipients.length, message: 'جاري الاستيراد...' })
+        
+        await fetch(`${API_URL}/recipients/bulk-create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipients })
+        })
+        
+        setProgress({ current: recipients.length, total: recipients.length, message: `تم إضافة ${recipients.length} مستفيد` })
         
         alert('تم استيراد المستفيدين بنجاح!')
         loadRecipients()
@@ -212,6 +260,7 @@ export default function AdminRecipientsPage() {
         alert('فشل في استيراد المستفيدين')
       } finally {
         setImporting(false)
+        setShowProgress(false)
         e.target.value = ''
       }
     }
@@ -225,10 +274,35 @@ export default function AdminRecipientsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
+      {showProgress && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4 text-center">{progress.message}</h3>
+            <div className="w-full bg-gray-200 rounded-full h-6 mb-4">
+              <div 
+                className="bg-primary h-6 rounded-full transition-all duration-300 flex items-center justify-center text-white font-bold"
+                style={{ width: `${(progress.current / progress.total) * 100}%` }}
+              >
+                {Math.round((progress.current / progress.total) * 100)}%
+              </div>
+            </div>
+            <p className="text-center text-lg font-bold">
+              {progress.current} / {progress.total}
+            </p>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-primary">إدارة المستفيدين</h1>
           <div className="flex gap-3">
+            <button
+              onClick={downloadTemplate}
+              className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:opacity-90"
+            >
+              📄 تحميل نموذج
+            </button>
             <label className="bg-warning text-white px-6 py-3 rounded-lg hover:opacity-90 cursor-pointer">
               {importing ? 'جاري الاستيراد...' : 'استيراد من Excel'}
               <input
@@ -250,7 +324,7 @@ export default function AdminRecipientsPage() {
                 setShowForm(!showForm)
                 if (showForm) {
                   setEditingRecipient(null)
-                  setFormData({ name: '', phone: '', basketLimit: '500000' })
+                  setFormData({ name: '', phone: '', basketLimit: '500000', gender: 'male' })
                 }
               }}
               className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark"
@@ -263,7 +337,7 @@ export default function AdminRecipientsPage() {
         {showForm && (
           <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg mb-8">
             <h3 className="text-xl font-bold mb-4">{editingRecipient ? 'تعديل مستفيد' : 'إضافة مستفيد'}</h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <input
                 type="text"
                 placeholder="الاسم"
@@ -280,6 +354,15 @@ export default function AdminRecipientsPage() {
                 required
                 className="border p-3 rounded"
               />
+              <select
+                value={formData.gender}
+                onChange={e => setFormData({ ...formData, gender: e.target.value })}
+                required
+                className="border p-3 rounded"
+              >
+                <option value="male">ذكر</option>
+                <option value="female">أنثى</option>
+              </select>
               <input
                 type="number"
                 placeholder="قيمة السلة ()"
@@ -358,8 +441,8 @@ export default function AdminRecipientsPage() {
                 </th>
                 <th className="p-4 text-right">الاسم</th>
                 <th className="p-4 text-right">رقم الملف</th>
+                <th className="p-4 text-right">الجنس</th>
                 <th className="p-4 text-right">قيمة السلة</th>
-                <th className="p-4 text-right">مدة الرابط</th>
                 <th className="p-4 text-right">حالة الرابط</th>
                 {/* <th className="p-4 text-right">الحالة</th> */}
                 <th className="p-4 text-right">الرابط</th>
@@ -378,18 +461,8 @@ export default function AdminRecipientsPage() {
                   </td>
                   <td className="p-4">{recipient.name}</td>
                   <td className="p-4">{recipient.phone}</td>
+                  <td className="p-4">{recipient.gender === 'female' ? 'أنثى' : 'ذكر'}</td>
                   <td className="p-4 font-bold text-primary">{(recipient.basketLimit || 500000).toLocaleString('ar-SY')} </td>
-                  <td className="p-4">
-                    <input
-                      type="number"
-                      min="1"
-                      max="30"
-                      value={recipient.linkDurationDays}
-                      onChange={(e) => updateLinkDuration(recipient.id, Number(e.target.value))}
-                      className="border-2 border-gray-300 rounded px-2 py-1 w-16 text-center"
-                    />
-                    <span className="mr-2">يوم</span>
-                  </td>
                   <td className="p-4">
                     <button
                       onClick={() => toggleLinkActive(recipient.id, recipient.linkActive)}

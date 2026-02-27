@@ -48,13 +48,13 @@ router.post('/:id/items', async (req, res) => {
     const { id } = req.params;
     const { items } = req.body;
     
-    // حذف المنتجات القديمة
+    // حذف المواد القديمة
     await supabase
       .from('default_basket_items')
       .delete()
       .eq('basket_id', id);
     
-    // إضافة المنتجات الجديدة
+    // إضافة المواد الجديدة
     const itemsToInsert = Object.entries(items)
       .filter(([_, quantity]) => quantity > 0)
       .map(([product_id, quantity]) => ({
@@ -73,7 +73,7 @@ router.post('/:id/items', async (req, res) => {
     
     res.json({ message: 'تم الحفظ' });
   } catch (error) {
-    res.status(500).json({ error: 'فشل في حفظ المنتجات' });
+    res.status(500).json({ error: 'فشل في حفظ المواد' });
   }
 });
 
