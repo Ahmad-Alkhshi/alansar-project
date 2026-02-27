@@ -31,6 +31,7 @@ export default function AdminRecipientsPage() {
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' })
   const [showProgress, setShowProgress] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all')
 
   useEffect(() => {
     loadRecipients()
@@ -304,6 +305,15 @@ export default function AdminRecipientsPage() {
     return <div className="p-8 text-center">جاري التحميل...</div>
   }
 
+  // فلترة المستفيدين حسب الحالة
+  const filteredRecipients = recipients.filter(recipient => {
+    if (statusFilter === 'all') return true;
+    const status = getOnlineStatus(recipient.last_seen);
+    if (statusFilter === 'online') return status.online;
+    if (statusFilter === 'offline') return !status.online;
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
       {showProgress && (
@@ -476,13 +486,26 @@ export default function AdminRecipientsPage() {
                 <th className="p-4 text-right">الجنس</th>
                 <th className="p-4 text-right">قيمة السلة</th>
                 <th className="p-4 text-right">حالة الرابط</th>
-                <th className="p-4 text-right">الحالة</th>
+                <th className="p-4 text-right">
+                  <div className="flex items-center gap-2">
+                    الحالة
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as 'all' | 'online' | 'offline')}
+                      className="bg-white text-primary border border-white rounded px-2 py-1 text-sm cursor-pointer"
+                    >
+                      <option value="all">الكل</option>
+                      <option value="online">متصل</option>
+                      <option value="offline">غير متصل</option>
+                    </select>
+                  </div>
+                </th>
                 {/* <th className="p-4 text-right">الحالة</th> */}
                 <th className="p-4 text-right">الرابط</th>
               </tr>
             </thead>
             <tbody>
-              {recipients.map(recipient => {
+              {filteredRecipients.map(recipient => {
                 const status = getOnlineStatus(recipient.last_seen);
                 return (
                 <tr key={recipient.id} className="border-b hover:bg-gray-50">
