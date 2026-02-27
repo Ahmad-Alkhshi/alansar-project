@@ -230,6 +230,15 @@ export default function AdminRecipientsPage() {
     const diffHours = Math.floor(diffMinutes / 60);
     const diffDays = Math.floor(diffHours / 24);
     
+    console.log('Online status check:', {
+      lastSeen,
+      now: now.toISOString(),
+      lastSeenDate: lastSeenDate.toISOString(),
+      diffSeconds,
+      diffMinutes,
+      diffHours
+    });
+    
     if (diffSeconds < 30) {
       return { online: true, text: 'متصل الآن 🟢', color: 'text-green-600 font-bold' };
     } else if (diffMinutes < 1) {
