@@ -716,22 +716,7 @@ export default function ClaimPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8 pb-32">
         <div className="space-y-3">
-          {[...products]
-            .sort((a, b) => {
-              const qtyA = getCartQuantity(a.id);
-              const qtyB = getCartQuantity(b.id);
-              const checkA = canAddProduct(a.price);
-              const checkB = canAddProduct(b.price);
-              const maxQtyA = a.maxQuantity || 10;
-              const maxQtyB = b.maxQuantity || 10;
-              const disabledA = !checkA.allowed || canSubmitOrder || qtyA >= maxQtyA;
-              const disabledB = !checkB.allowed || canSubmitOrder || qtyB >= maxQtyB;
-              
-              if (disabledA && !disabledB) return 1;
-              if (!disabledA && disabledB) return -1;
-              return 0;
-            })
-            .map((product) => {
+          {products.map((product) => {
             const quantity = getCartQuantity(product.id);
             const checkResult = canAddProduct(product.price);
             const maxQty = product.maxQuantity || 10;
@@ -740,11 +725,7 @@ export default function ClaimPage() {
             return (
               <div
                 key={product.id}
-                className={`rounded-lg shadow p-4 transition-all ${
-                  isDisabled 
-                    ? 'bg-gray-100 opacity-60' 
-                    : 'bg-white'
-                }`}
+                className="bg-white rounded-lg shadow p-4"
               >
                 <h3 className="text-xl font-bold mb-3">{product.name}</h3>
                 <div className="flex items-center justify-between">
@@ -765,7 +746,11 @@ export default function ClaimPage() {
                     <button
                       onClick={() => addToCart(product.id)}
                       disabled={isDisabled}
-                      className="bg-success text-white text-2xl font-bold w-12 h-12 rounded-lg hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className={`text-2xl font-bold w-12 h-12 rounded-lg ${
+                        isDisabled 
+                          ? 'invisible' 
+                          : 'bg-success text-white hover:opacity-90'
+                      }`}
                     >
                       +
                     </button>

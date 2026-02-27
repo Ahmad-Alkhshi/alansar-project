@@ -68,8 +68,13 @@ function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisib
           type="number"
           min="1"
           max="99"
-          value={product.maxQuantity || 10}
-          onChange={(e) => updateMaxQuantity(product.id, Number(e.target.value))}
+          defaultValue={product.maxQuantity || 10}
+          onBlur={(e) => {
+            const newValue = Number(e.target.value);
+            if (newValue !== (product.maxQuantity || 10)) {
+              updateMaxQuantity(product.id, newValue);
+            }
+          }}
           className="border-2 border-gray-300 rounded px-2 py-1 w-16 text-center"
         />
       </td>
@@ -259,10 +264,21 @@ export default function AdminProductsPage() {
 
   async function updateMaxQuantity(id: string, maxQuantity: number) {
     try {
-      await api.updateProduct(id, { maxQuantity })
+      console.log('Updating maxQuantity:', { id, maxQuantity })
+      const res = await fetch(`${API_URL}/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxQuantity })
+      })
+      const data = await res.json()
+      console.log('Response:', data)
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update')
+      }
       loadProducts()
     } catch (error) {
-      alert('فشل في تحديث الحد الأقصى')
+      console.error('Update error:', error)
+      alert('فشل في تحديث الحد الأقصى: ' + error)
     }
   }
 

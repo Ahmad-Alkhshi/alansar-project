@@ -19,11 +19,18 @@ export const getProducts = async (req, res) => {
 
 export const createProduct = async (req, res) => {
   try {
-    const { name, price, stock, imageUrl } = req.body;
+    const { name, price, stock, imageUrl, maxQuantity } = req.body;
 
     const { data, error } = await supabase
       .from('products')
-      .insert([{ name, price, stock, image_url: imageUrl, is_active: true }])
+      .insert([{ 
+        name, 
+        price, 
+        stock, 
+        image_url: imageUrl, 
+        is_active: true,
+        max_quantity: maxQuantity || 10
+      }])
       .select()
       .single();
 
@@ -38,7 +45,7 @@ export const createProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, stock, imageUrl, isActive } = req.body;
+    const { name, price, stock, imageUrl, isActive, maxQuantity } = req.body;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -46,6 +53,7 @@ export const updateProduct = async (req, res) => {
     if (stock !== undefined) updateData.stock = stock;
     if (imageUrl !== undefined) updateData.image_url = imageUrl;
     if (isActive !== undefined) updateData.is_active = isActive;
+    if (maxQuantity !== undefined) updateData.max_quantity = maxQuantity;
 
     const { data, error } = await supabase
       .from('products')
