@@ -21,24 +21,29 @@ export const createProduct = async (req, res) => {
   try {
     const { name, price, stock, imageUrl, maxQuantity } = req.body;
 
+    const productData = { 
+      name, 
+      price, 
+      stock, 
+      image_url: imageUrl, 
+      is_active: true
+    };
+
     const { data, error } = await supabase
       .from('products')
-      .insert([{ 
-        name, 
-        price, 
-        stock, 
-        image_url: imageUrl, 
-        is_active: true,
-        max_quantity: maxQuantity || 10
-      }])
+      .insert([productData])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Create product error:', error);
+      throw error;
+    }
 
     res.json(data);
   } catch (error) {
-    res.status(500).json({ error: 'فشل في إضافة المنتج' });
+    console.error('Create error:', error);
+    res.status(500).json({ error: 'فشل في إضافة المنتج', details: error.message });
   }
 };
 
@@ -53,8 +58,6 @@ export const updateProduct = async (req, res) => {
     if (stock !== undefined) updateData.stock = stock;
     if (imageUrl !== undefined) updateData.image_url = imageUrl;
     if (isActive !== undefined) updateData.is_active = isActive;
-    if (maxQuantity !== undefined) updateData.max_quantity = maxQuantity;
-    if (max_quantity !== undefined) updateData.max_quantity = max_quantity;
 
     console.log('Update product:', id, updateData);
 
@@ -142,17 +145,26 @@ export const bulkCreateProducts = async (req, res) => {
   try {
     const { products } = req.body;
 
+    // Remove max_quantity if column doesn't exist
+    const productsToInsert = products.map(p => {
+      const { maxQuantity, max_quantity, ...rest } = p;
+      return rest;
+    });
+
     const { data, error } = await supabase
       .from('products')
-      .insert(products)
+      .insert(productsToInsert)
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Bulk create error:', error);
+      throw error;
+    }
 
     res.json({ message: `تم إضافة ${data.length} منتج`, data });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'فشل في الإضافة الجماعية' });
+    console.error('Bulk create error:', error);
+    res.status(500).json({ error: 'فشل في الإضافة الجماعية', details: error.message });
   }
 };
 
