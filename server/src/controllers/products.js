@@ -45,7 +45,7 @@ export const createProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, stock, imageUrl, isActive, maxQuantity } = req.body;
+    const { name, price, stock, imageUrl, isActive, maxQuantity, max_quantity } = req.body;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -54,6 +54,9 @@ export const updateProduct = async (req, res) => {
     if (imageUrl !== undefined) updateData.image_url = imageUrl;
     if (isActive !== undefined) updateData.is_active = isActive;
     if (maxQuantity !== undefined) updateData.max_quantity = maxQuantity;
+    if (max_quantity !== undefined) updateData.max_quantity = max_quantity;
+
+    console.log('Update product:', id, updateData);
 
     const { data, error } = await supabase
       .from('products')
@@ -62,12 +65,15 @@ export const updateProduct = async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
 
     res.json(data);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'فشل في تحديث المنتج' });
+    console.error('Update error:', error);
+    res.status(500).json({ error: 'فشل في تحديث المنتج', details: error.message });
   }
 };
 
