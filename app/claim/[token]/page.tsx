@@ -716,7 +716,22 @@ export default function ClaimPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8 pb-32">
         <div className="space-y-3">
-          {products.map((product) => {
+          {[...products]
+            .sort((a, b) => {
+              const qtyA = getCartQuantity(a.id);
+              const qtyB = getCartQuantity(b.id);
+              const checkA = canAddProduct(a.price);
+              const checkB = canAddProduct(b.price);
+              const maxQtyA = a.maxQuantity || 10;
+              const maxQtyB = b.maxQuantity || 10;
+              const disabledA = !checkA.allowed || canSubmitOrder || qtyA >= maxQtyA;
+              const disabledB = !checkB.allowed || canSubmitOrder || qtyB >= maxQtyB;
+              
+              if (disabledA && !disabledB) return 1;
+              if (!disabledA && disabledB) return -1;
+              return 0;
+            })
+            .map((product) => {
             const quantity = getCartQuantity(product.id);
             const checkResult = canAddProduct(product.price);
             const maxQty = product.maxQuantity || 10;
@@ -725,7 +740,11 @@ export default function ClaimPage() {
             return (
               <div
                 key={product.id}
-                className="bg-white rounded-lg shadow p-4"
+                className={`rounded-lg shadow p-4 transition-all ${
+                  isDisabled 
+                    ? 'bg-gray-100 opacity-60' 
+                    : 'bg-white'
+                }`}
               >
                 <h3 className="text-xl font-bold mb-3">{product.name}</h3>
                 <div className="flex items-center justify-between">
