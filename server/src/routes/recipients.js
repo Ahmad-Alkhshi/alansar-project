@@ -28,16 +28,23 @@ router.post('/reset-order/:token', async (req, res) => {
 router.post('/heartbeat/:token', async (req, res) => {
   try {
     const { token } = req.params;
+    console.log('Heartbeat received for token:', token);
     
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('recipients')
       .update({ last_seen: new Date().toISOString() })
-      .eq('token', token);
+      .eq('token', token)
+      .select();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Heartbeat error:', error);
+      throw error;
+    }
     
+    console.log('Heartbeat updated:', data);
     res.json({ success: true });
   } catch (error) {
+    console.error('Heartbeat failed:', error);
     res.status(500).json({ error: 'فشل في التحديث' });
   }
 });

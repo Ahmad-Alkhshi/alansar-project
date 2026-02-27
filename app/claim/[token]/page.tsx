@@ -49,9 +49,12 @@ export default function ClaimPage() {
     // إرسال heartbeat فوري عند فتح الصفحة
     const sendHeartbeat = async () => {
       try {
-        await fetch(`${API_URL}/recipients/heartbeat/${token}`, {
+        console.log('Sending heartbeat for token:', token);
+        const response = await fetch(`${API_URL}/recipients/heartbeat/${token}`, {
           method: 'POST'
         });
+        const data = await response.json();
+        console.log('Heartbeat response:', data);
       } catch (err) {
         console.error('Heartbeat failed:', err);
       }
