@@ -156,14 +156,14 @@ export default function AdminProductsPage() {
         await api.updateProduct(editingProduct.id, {
           name: `${formData.name} - ${formData.quantity}`,
           price: parseInt(formData.price),
-          maxQuantity: parseInt(formData.maxQuantity)
+          max_quantity: parseInt(formData.maxQuantity)
         })
       } else {
         await api.createProduct({
           name: `${formData.name} - ${formData.quantity}`,
           price: parseInt(formData.price),
           stock: 999,
-          maxQuantity: parseInt(formData.maxQuantity)
+          max_quantity: parseInt(formData.maxQuantity)
         })
       }
       setFormData({ name: '', quantity: '', price: '', maxQuantity: '10' })
@@ -211,7 +211,7 @@ export default function AdminProductsPage() {
               price: parseInt(price),
               stock: 999,
               is_active: true,
-              maxQuantity: maxQuantity ? parseInt(maxQuantity) : 10
+              max_quantity: maxQuantity ? parseInt(maxQuantity) : 10
             })
           }
         }
@@ -268,7 +268,7 @@ export default function AdminProductsPage() {
       const res = await fetch(`${API_URL}/products/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxQuantity })
+        body: JSON.stringify({ max_quantity: maxQuantity })
       })
       const data = await res.json()
       console.log('Response:', data)

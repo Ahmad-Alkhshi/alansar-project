@@ -19,7 +19,7 @@ export const getProducts = async (req, res) => {
 
 export const createProduct = async (req, res) => {
   try {
-    const { name, price, stock, imageUrl, maxQuantity } = req.body;
+    const { name, price, stock, imageUrl, maxQuantity, max_quantity } = req.body;
 
     const productData = { 
       name, 
@@ -27,7 +27,7 @@ export const createProduct = async (req, res) => {
       stock, 
       image_url: imageUrl, 
       is_active: true,
-      max_quantity: maxQuantity || 10
+      max_quantity: max_quantity || maxQuantity || 10
     };
 
     const { data, error } = await supabase
@@ -51,7 +51,7 @@ export const createProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, stock, imageUrl, isActive, maxQuantity } = req.body;
+    const { name, price, stock, imageUrl, isActive, maxQuantity, max_quantity } = req.body;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -59,6 +59,7 @@ export const updateProduct = async (req, res) => {
     if (stock !== undefined) updateData.stock = stock;
     if (imageUrl !== undefined) updateData.image_url = imageUrl;
     if (isActive !== undefined) updateData.is_active = isActive;
+    if (max_quantity !== undefined) updateData.max_quantity = max_quantity;
     if (maxQuantity !== undefined) updateData.max_quantity = maxQuantity;
 
     console.log('Update product:', id, updateData);
