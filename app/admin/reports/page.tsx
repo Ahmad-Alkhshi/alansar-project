@@ -22,7 +22,7 @@ export default function ReportsPage() {
   const [recipients, setRecipients] = useState<any[]>([])
   const [defaultBaskets, setDefaultBaskets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [reportType, setReportType] = useState<'collective' | 'individual'>('collective')
+  const [reportType, setReportType] = useState<'collective' | 'collectiveWithDefaults' | 'individual'>('collective')
   const [sortField, setSortField] = useState<'name' | 'quantity'>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
@@ -48,6 +48,28 @@ export default function ReportsPage() {
   }
 
   function getCollectiveReport() {
+    const productMap: { [key: string]: { name: string; unit: string; quantity: number } } = {}
+    
+    // من الطلبات الحقيقية فقط
+    orders.forEach(order => {
+      order.order_items?.forEach(item => {
+        const fullName = item.products?.name || 'منتج'
+        const parts = fullName.split(' - ')
+        const name = parts[0] || fullName
+        const unit = parts[1] || ''
+        
+        const key = fullName
+        if (!productMap[key]) {
+          productMap[key] = { name, unit, quantity: 0 }
+        }
+        productMap[key].quantity += item.quantity
+      })
+    })
+
+    return Object.values(productMap)
+  }
+
+  function getCollectiveWithDefaultsReport() {
     const productMap: { [key: string]: { name: string; unit: string; quantity: number } } = {}
     
     // من الطلبات الحقيقية
@@ -234,7 +256,7 @@ export default function ReportsPage() {
     return <div className="p-8 text-center text-xl">جاري التحميل...</div>
   }
 
-  const collectiveReport = getCollectiveReport()
+  const collectiveReport = reportType === 'collectiveWithDefaults' ? getCollectiveWithDefaultsReport() : getCollectiveReport()
   
   // ترتيب التقرير الجماعي
   const sortedReport = [...collectiveReport].sort((a, b) => {
@@ -272,7 +294,17 @@ export default function ReportsPage() {
                 : 'bg-gray-200 text-gray-700'
             }`}
           >
-            التقرير الجماعي
+            جماعي (طلبات فقط)
+          </button>
+          <button
+            onClick={() => setReportType('collectiveWithDefaults')}
+            className={`px-6 py-3 rounded-lg font-bold ${
+              reportType === 'collectiveWithDefaults'
+                ? 'bg-primary text-white'
+                : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            جماعي + السلال الافتراضية
           </button>
           <button
             onClick={() => setReportType('individual')}
@@ -286,7 +318,7 @@ export default function ReportsPage() {
           </button>
         </div>
 
-        {reportType === 'collective' ? (
+        {reportType === 'collective' || reportType === 'collectiveWithDefaults' ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">المواد المطلوبة للشراء</h2>
