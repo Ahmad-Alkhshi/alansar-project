@@ -26,22 +26,24 @@ model Recipient {
 }
 
 model Product {
-  id          String      @id @default(cuid())
-  name        String
-  price       Int
-  stock       Int         @default(0)
-  imageUrl    String?
-  isActive    Boolean     @default(true)
-  displayOrder Int        @default(999)
-  unit        String      @default("1 كيلو") // Unit description
-  unitWeight  Int         @default(1000) // Weight per unit in grams
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id            String      @id @default(cuid())
+  name          String
+  price         Int
+  stock         Int         @default(0)
+  imageUrl      String?
+  isActive      Boolean     @default(true)
+  displayOrder  Int         @default(999) // Order for warehouse workers
+  recipientOrder Int        @default(999) // Order for recipients
+  unit          String      @default("1 كيلو") // Unit description
+  unitWeight    Int         @default(1000) // Weight per unit in grams
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   
   cartItems   CartItem[]
   orderItems  OrderItem[]
   
   @@index([displayOrder])
+  @@index([recipientOrder])
   @@index([unitWeight])
 }
 

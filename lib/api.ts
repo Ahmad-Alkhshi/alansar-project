@@ -2,8 +2,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 export const api = {
   // Products
-  getProducts: async () => {
-    const res = await fetch(`${API_URL}/products`);
+  getProducts: async (orderType?: 'display' | 'recipient') => {
+    const url = orderType ? `${API_URL}/products?orderType=${orderType}` : `${API_URL}/products`;
+    const res = await fetch(url);
     return res.json();
   },
 
@@ -87,11 +88,11 @@ export const api = {
     return res.json();
   },
 
-  updateProductsOrder: async (products: Array<{id: string, order: number}>) => {
+  updateProductsOrder: async (products: Array<{id: string, order: number}>, orderType: 'display' | 'recipient' = 'display') => {
     const res = await fetch(`${API_URL}/admin/products/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ products }),
+      body: JSON.stringify({ products, orderType }),
     });
     return res.json();
   },

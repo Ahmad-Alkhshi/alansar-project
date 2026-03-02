@@ -75,7 +75,7 @@ export default function ClaimPage() {
         setLoading(true);
       }
 
-      const productsData = await api.getProducts();
+      const productsData = await api.getProducts('recipient');
       setProducts(productsData);
 
       const cartData = await api.getCart(token);

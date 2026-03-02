@@ -121,6 +121,7 @@ export default function AdminProductsPage() {
   const [importing, setImporting] = useState(false)
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [orderType, setOrderType] = useState<'display' | 'recipient'>('display') // Filter for order type
   const [formData, setFormData] = useState({
     name: '',
     quantity: '',
@@ -138,11 +139,11 @@ export default function AdminProductsPage() {
       loadProducts()
     }, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [orderType]) // Reload when order type changes
 
   async function loadProducts() {
     try {
-      const res = await fetch(`${API_URL}/admin/products`)
+      const res = await fetch(`${API_URL}/admin/products?orderType=${orderType}`)
       const data = await res.json()
       const products = data.map((p: any) => ({
         ...p,
@@ -403,7 +404,7 @@ export default function AdminProductsPage() {
       }))
 
       try {
-        await api.updateProductsOrder(orderedProducts)
+        await api.updateProductsOrder(orderedProducts, orderType)
       } catch (error) {
         alert('فشل في حفظ الترتيب')
         loadProducts()
@@ -440,6 +441,30 @@ export default function AdminProductsPage() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-primary">إدارة المواد</h1>
           <div className="flex gap-3">
+            {/* Order Type Filter */}
+            <div className="flex gap-2 bg-white rounded-lg p-1 shadow">
+              <button
+                onClick={() => setOrderType('display')}
+                className={`px-4 py-2 rounded-lg font-bold transition ${
+                  orderType === 'display'
+                    ? 'bg-primary text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                👷 ترتيب العمال
+              </button>
+              <button
+                onClick={() => setOrderType('recipient')}
+                className={`px-4 py-2 rounded-lg font-bold transition ${
+                  orderType === 'recipient'
+                    ? 'bg-primary text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                👥 ترتيب المستفيدين
+              </button>
+            </div>
+            
             <button
               onClick={downloadTemplate}
               className="bg-warning text-white px-6 py-3 rounded-lg hover:opacity-90"

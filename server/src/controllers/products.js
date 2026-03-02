@@ -2,17 +2,28 @@ import { supabase } from '../config/supabase.js';
 
 export const getProducts = async (req, res) => {
   try {
+    const { orderType } = req.query; // 'display', 'recipient', or undefined (default)
+    
+    const orderField = orderType === 'recipient' ? 'recipient_order' : 'display_order';
+    
+    console.log('Getting products with orderType:', orderType, 'using field:', orderField);
+
     const { data, error } = await supabase
       .from('products')
       .select('*')
       .eq('is_active', true)
-      .order('display_order', { ascending: true })
+      .order(orderField, { ascending: true })
       .order('name', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching products:', error);
+      throw error;
+    }
 
+    console.log('Fetched', data?.length, 'products');
     res.json(data);
   } catch (error) {
+    console.error('getProducts error:', error);
     res.status(500).json({ error: 'فشل في جلب المواد' });
   }
 };
@@ -171,18 +182,27 @@ export const bulkCreateProducts = async (req, res) => {
 
 export const updateProductsOrder = async (req, res) => {
   try {
-    const { products } = req.body;
+    const { products, orderType } = req.body; // orderType: 'display' or 'recipient'
+
+    const orderField = orderType === 'recipient' ? 'recipient_order' : 'display_order';
+    
+    console.log('Updating products order:', orderType, 'field:', orderField, 'products:', products.length);
 
     for (const product of products) {
-      await supabase
+      const { error } = await supabase
         .from('products')
-        .update({ display_order: product.order })
+        .update({ [orderField]: product.order })
         .eq('id', product.id);
+        
+      if (error) {
+        console.error('Error updating product', product.id, error);
+      }
     }
 
+    console.log('Order update completed');
     res.json({ message: 'تم تحديث الترتيب بنجاح' });
   } catch (error) {
-    console.error(error);
+    console.error('updateProductsOrder error:', error);
     res.status(500).json({ error: 'فشل في تحديث الترتيب' });
   }
 };
