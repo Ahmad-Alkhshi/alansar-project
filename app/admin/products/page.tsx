@@ -461,7 +461,7 @@ export default function AdminProductsPage() {
                 setShowForm(!showForm)
                 if (showForm) {
                   setEditingProduct(null)
-                  setFormData({ name: '', quantity: '', price: '', maxQuantity: '10' })
+                  setFormData({ name: '', quantity: '', price: '', maxQuantity: '10', unit: '1 كيلو', unitWeight: '1000' })
                 }
               }}
               className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark"
