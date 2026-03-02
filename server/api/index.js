@@ -9,6 +9,7 @@ import adminRoutes from '../src/routes/admin.js';
 import authRoutes from '../src/routes/auth.js';
 import defaultBasketsRoutes from '../src/routes/default-baskets.js';
 import warehouseRoutes from '../src/routes/warehouse.js';
+import workersRoutes from '../src/routes/workers.js';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/recipients', recipientsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/default-baskets', defaultBasketsRoutes);
 app.use('/api/warehouse', warehouseRoutes);
+app.use('/api/workers', workersRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Alansar Charity API' });
