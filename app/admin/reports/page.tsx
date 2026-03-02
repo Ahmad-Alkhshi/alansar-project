@@ -22,7 +22,7 @@ export default function ReportsPage() {
   const [recipients, setRecipients] = useState<any[]>([])
   const [defaultBaskets, setDefaultBaskets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [reportType, setReportType] = useState<'collective' | 'collectiveWithDefaults' | 'individual'>('collective')
+  const [reportType, setReportType] = useState<'collective' | 'collectiveWithDefaults' | 'individual' | 'individualClaimedOnly'>('collective')
   const [sortField, setSortField] = useState<'name' | 'quantity'>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
@@ -285,7 +285,7 @@ export default function ReportsPage() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-primary mb-8">التقارير</h1>
 
-        <div className="flex gap-4 mb-8">
+        <div className="flex gap-4 mb-8 flex-wrap">
           <button
             onClick={() => setReportType('collective')}
             className={`px-6 py-3 rounded-lg font-bold ${
@@ -307,6 +307,16 @@ export default function ReportsPage() {
             جماعي + السلال الافتراضية
           </button>
           <button
+            onClick={() => setReportType('individualClaimedOnly')}
+            className={`px-6 py-3 rounded-lg font-bold ${
+              reportType === 'individualClaimedOnly'
+                ? 'bg-primary text-white'
+                : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            فردي (طلبات فقط)
+          </button>
+          <button
             onClick={() => setReportType('individual')}
             className={`px-6 py-3 rounded-lg font-bold ${
               reportType === 'individual'
@@ -314,7 +324,7 @@ export default function ReportsPage() {
                 : 'bg-gray-200 text-gray-700'
             }`}
           >
-            التقرير الفردي
+            فردي (الكل)
           </button>
         </div>
 
@@ -400,6 +410,11 @@ export default function ReportsPage() {
             <div className="space-y-6">
               {recipients.map((recipient, idx) => {
                 const order = orders.find(o => o.recipients?.phone === recipient.phone)
+                
+                // إذا كان الفلتر "طلبات فقط" ولا يوجد طلب، تجاهل هذا المستفيد
+                if (reportType === 'individualClaimedOnly' && !order) {
+                  return null
+                }
                 
                 if (order) {
                   return (

@@ -11,6 +11,7 @@ model Recipient {
   id              String    @id @default(cuid())
   name            String
   phone           String    @unique
+  fileNumber      String?   @unique
   token           String    @unique
   tokenExpiresAt  DateTime?
   orderSubmitted  Boolean   @default(false)
@@ -21,6 +22,7 @@ model Recipient {
   order           Order?
   
   @@index([token])
+  @@index([fileNumber])
 }
 
 model Product {
@@ -30,11 +32,17 @@ model Product {
   stock       Int         @default(0)
   imageUrl    String?
   isActive    Boolean     @default(true)
+  displayOrder Int        @default(999)
+  unit        String      @default("1 كيلو") // Unit description
+  unitWeight  Int         @default(1000) // Weight per unit in grams
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   
   cartItems   CartItem[]
   orderItems  OrderItem[]
+  
+  @@index([displayOrder])
+  @@index([unitWeight])
 }
 
 model Cart {
@@ -65,24 +73,39 @@ model CartItem {
 }
 
 model Order {
-  id          String      @id @default(cuid())
-  recipientId String      @unique
-  finalTotal  Int
-  status      String      @default("pending") // pending, prepared, delivered
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                String      @id @default(cuid())
+  recipientId       String      @unique
+  finalTotal        Int
+  status            String      @default("pending") // pending, prepared, delivered
+  warehouseStatus   String      @default("pending") // pending, in_progress, completed, has_issues
+  warehouseNotes    String?
+  warehouseLockedBy String?
+  warehouseLockedAt DateTime?
+  basketNumber      Int?        // Final basket number
+  basketNumberReserved DateTime? // Temporary reservation timestamp
+  workerId          String?     // Worker who prepared this order
+  workerName        String?     // Worker name for quick display
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
   
   recipient   Recipient   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  worker      Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
   items       OrderItem[]
+  
+  @@index([basketNumber])
+  @@index([basketNumberReserved])
+  @@index([workerId])
 }
 
 model OrderItem {
-  id          String   @id @default(cuid())
-  orderId     String
-  productId   String
-  quantity    Int
-  unitPrice   Int
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  orderId         String
+  productId       String
+  quantity        Int
+  unitPrice       Int
+  warehouseStatus String   @default("pending") // pending, checked, issue
+  warehouseNotes  String?
+  createdAt       DateTime @default(now())
   
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product  @relation(fields: [productId], references: [id])
@@ -94,4 +117,20 @@ model Admin {
   password  String
   name      String
   createdAt DateTime @default(now())
+}
+
+model Worker {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  token     String   @unique
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  orders    Order[]
+  
+  @@index([token])
+  @@index([isActive])
 }

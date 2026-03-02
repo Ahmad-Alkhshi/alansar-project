@@ -11,6 +11,7 @@ interface Product {
   stock: number;
   imageUrl: string | null;
   max_quantity?: number;
+  unit?: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -116,12 +117,16 @@ export default function ClaimPage() {
             "انتهت ميزة اختيار مواد السلة، يرجى انتظار رسالة لاستلام سلة جاهزة من الجمعية. ستستلم سلة غذائية جاهزة.",
           );
 
-          // جلب السلة الافتراضية
+          // جلب السلة الافتراضية بناءً على قيمة سلة المستفيد
           try {
             const basketValue =
               cartData.recipient.basket_limit ||
               cartData.recipient.basketLimit ||
               500000;
+            
+            // تحديث baseLimit بقيمة سلة المستفيد
+            setBaseLimit(basketValue);
+            
             const defaultBasketRes = await fetch(
               `${API_URL}/default-baskets/by-value/${basketValue}`,
             );
@@ -155,9 +160,11 @@ export default function ClaimPage() {
               });
             }
           } catch (err) {
+            const basketValue = cartData.recipient.basket_limit || cartData.recipient.basketLimit || 500000;
+            setBaseLimit(basketValue);
             setExistingOrder({
               id: "default",
-              final_total: cartData.recipient.basket_limit || 500000,
+              final_total: basketValue,
               order_items: [],
               recipients: {
                 name: cartData.recipient.name,
@@ -643,6 +650,7 @@ export default function ClaimPage() {
                       >
                         <div className="font-medium mb-2">
                           {item.products?.name || item.product?.name || "منتج"}
+                          {(item.products?.unit || item.product?.unit) && ` - ${item.products?.unit || item.product?.unit}`}
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-gray-600">
@@ -748,7 +756,10 @@ export default function ClaimPage() {
                 key={product.id}
                 className="bg-white rounded-lg shadow p-4"
               >
-                <h3 className="text-xl font-bold mb-3">{product.name}</h3>
+                <h3 className="text-xl font-bold mb-3">
+                  {product.name}
+                  {product.unit && ` - ${product.unit}`}
+                </h3>
                 <div className="flex items-center justify-between">
                   <div className="text-2xl font-bold text-primary">
                     {product.price.toLocaleString("en-US")} 
@@ -811,6 +822,8 @@ export default function ClaimPage() {
                 لإضافة{" "}
                 <span className="font-bold text-primary">
                   {products.find((p) => p.id === pendingProduct)?.name}
+                  {products.find((p) => p.id === pendingProduct)?.unit && 
+                    ` - ${products.find((p) => p.id === pendingProduct)?.unit}`}
                 </span>
                 ، يجب حذف أحد المواد التالية:
               </p>
@@ -822,7 +835,10 @@ export default function ClaimPage() {
                     className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border-2 border-gray-200"
                   >
                     <div>
-                      <div className="font-bold text-lg">{item.name}</div>
+                      <div className="font-bold text-lg">
+                        {item.name}
+                        {item.unit && ` - ${item.unit}`}
+                      </div>
                       <div className="text-gray-600">
                         الكمية: {item.quantity}
                       </div>

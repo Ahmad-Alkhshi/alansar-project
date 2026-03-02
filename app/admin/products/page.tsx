@@ -32,6 +32,8 @@ interface Product {
   isActive: boolean
   display_order?: number
   maxQuantity?: number
+  unit?: string
+  unit_weight?: number
 }
 
 function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisibility, deleteProduct, updateMaxQuantity, handleEdit }: any) {
@@ -62,6 +64,8 @@ function SortableProduct({ product, toggleSelect, isSelected, toggleProductVisib
         <span className="text-2xl">☰</span>
       </td>
       <td className="p-4 text-lg">{product.name}</td>
+      <td className="p-4 text-lg">{product.unit || '1 كيلو'}</td>
+      <td className="p-4 text-lg">{product.unit_weight || 1000} غ</td>
       <td className="p-4 text-lg font-bold">{product.price.toLocaleString('ar-SY')} </td>
       <td className="p-4">
         <input
@@ -121,7 +125,9 @@ export default function AdminProductsPage() {
     name: '',
     quantity: '',
     price: '',
-    maxQuantity: '10'
+    maxQuantity: '10',
+    unit: '1 كيلو',
+    unitWeight: '1000'
   })
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' })
   const [showProgress, setShowProgress] = useState(false)
@@ -158,19 +164,23 @@ export default function AdminProductsPage() {
     try {
       if (editingProduct) {
         await api.updateProduct(editingProduct.id, {
-          name: `${formData.name} - ${formData.quantity}`,
+          name: formData.name,
           price: parseInt(formData.price),
-          max_quantity: parseInt(formData.maxQuantity)
+          max_quantity: parseInt(formData.maxQuantity),
+          unit: formData.unit,
+          unit_weight: parseInt(formData.unitWeight)
         })
       } else {
         await api.createProduct({
-          name: `${formData.name} - ${formData.quantity}`,
+          name: formData.name,
           price: parseInt(formData.price),
           stock: 999,
-          max_quantity: parseInt(formData.maxQuantity)
+          max_quantity: parseInt(formData.maxQuantity),
+          unit: formData.unit,
+          unit_weight: parseInt(formData.unitWeight)
         })
       }
-      setFormData({ name: '', quantity: '', price: '', maxQuantity: '10' })
+      setFormData({ name: '', quantity: '', price: '', maxQuantity: '10', unit: '1 كيلو', unitWeight: '1000' })
       setEditingProduct(null)
       setShowForm(false)
       loadProducts()
@@ -180,13 +190,14 @@ export default function AdminProductsPage() {
   }
 
   function handleEdit(product: Product) {
-    const [name, quantity] = product.name.split(' - ')
     setEditingProduct(product)
     setFormData({
-      name: name || '',
-      quantity: quantity || '',
+      name: product.name,
+      quantity: '',
       price: product.price.toString(),
-      maxQuantity: (product.maxQuantity || 10).toString()
+      maxQuantity: (product.maxQuantity || 10).toString(),
+      unit: product.unit || '1 كيلو',
+      unitWeight: (product.unit_weight || 1000).toString()
     })
     setShowForm(true)
   }
@@ -463,20 +474,12 @@ export default function AdminProductsPage() {
         {showForm && (
           <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg mb-8">
             <h3 className="text-xl font-bold mb-4">{editingProduct ? 'تعديل منتج' : 'إضافة منتج'}</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <input
                 type="text"
-                placeholder="اسم المادة (مثال: رز)"
+                placeholder="اسم المادة (مثال: رز، شاي، زيت)"
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                required
-                className="border p-3 rounded text-lg"
-              />
-              <input
-                type="text"
-                placeholder="الكمية (مثال: 1 كيلو)"
-                value={formData.quantity}
-                onChange={e => setFormData({ ...formData, quantity: e.target.value })}
                 required
                 className="border p-3 rounded text-lg"
               />
@@ -486,6 +489,25 @@ export default function AdminProductsPage() {
                 value={formData.price}
                 onChange={e => setFormData({ ...formData, price: e.target.value })}
                 required
+                className="border p-3 rounded text-lg"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <input
+                type="text"
+                placeholder="الوحدة (مثال: 1 كيلو، 25 ظرف، 1 لتر)"
+                value={formData.unit}
+                onChange={e => setFormData({ ...formData, unit: e.target.value })}
+                required
+                className="border p-3 rounded text-lg"
+              />
+              <input
+                type="number"
+                placeholder="وزن الوحدة بالغرام (مثال: 1000، 100، 800)"
+                value={formData.unitWeight}
+                onChange={e => setFormData({ ...formData, unitWeight: e.target.value })}
+                required
+                min="1"
                 className="border p-3 rounded text-lg"
               />
               <input
@@ -552,6 +574,8 @@ export default function AdminProductsPage() {
                   </th>
                   <th className="p-4 text-right">ترتيب</th>
                   <th className="p-4 text-right">المادة</th>
+                  <th className="p-4 text-right">الوحدة</th>
+                  <th className="p-4 text-right">وزن الوحدة</th>
                   <th className="p-4 text-right">السعر</th>
                   <th className="p-4 text-right">الحد الأقصى</th>
                   <th className="p-4 text-right">الحالة</th>

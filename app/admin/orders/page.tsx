@@ -8,8 +8,12 @@ interface OrderItem {
   product_id: string;
   quantity: number;
   unit_price: number;
+  warehouse_status: string;
+  warehouse_notes: string | null;
   products: {
     name: string;
+    unit_weight?: number;
+    unit?: string;
   };
 }
 
@@ -17,6 +21,10 @@ interface Order {
   id: string;
   final_total: number;
   status: string;
+  warehouse_status: string;
+  warehouse_notes: string | null;
+  worker_name: string | null;
+  basket_number: number | null;
   created_at: string;
   recipients: {
     name: string;
@@ -45,10 +53,95 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [editRequests, setEditRequests] = useState<EditRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"orders" | "editRequests">(
+  const [activeTab, setActiveTab] = useState<"orders" | "editRequests" | "issues">(
     "orders",
   );
   const [editDeadlineDays, setEditDeadlineDays] = useState(2);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [showCopyMessage, setShowCopyMessage] = useState(false);
+
+  const warehouseUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/warehouse/warehouse-access`
+    : '';
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+  function copyWarehouseLink() {
+    navigator.clipboard.writeText(warehouseUrl);
+    setShowCopyMessage(true);
+    setTimeout(() => setShowCopyMessage(false), 3000);
+  }
+
+  async function resetOrderForPreparation(orderId: string) {
+    if (!confirm('هل تريد إعادة تجهيز هذا الطلب؟ سيتم مسح كل البيانات السابقة.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/warehouse/orders/${orderId}/reset`, {
+        method: 'POST'
+      });
+
+      if (!res.ok) throw new Error('فشل في إعادة التعيين');
+
+      alert('✓ تم إعادة تعيين الطلب بنجاح');
+      loadData();
+    } catch (error) {
+      alert('فشل في إعادة تعيين الطلب');
+    }
+  }
+
+  async function resolveIssue(orderId: string) {
+    if (!confirm('هل تم حل المشكلة؟ سيتم تحويل الطلب إلى "تم التجهيز".')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/warehouse/orders/${orderId}/resolve`, {
+        method: 'POST'
+      });
+
+      if (!res.ok) throw new Error('فشل في حل المشكلة');
+
+      alert('✓ تم حل المشكلة بنجاح');
+      loadData();
+    } catch (error) {
+      alert('فشل في حل المشكلة');
+    }
+  }
+
+  async function resetAllOrders() {
+    const confirmText = prompt(
+      'تحذير: هذا الإجراء سيعيد تعيين جميع الطلبات!\n\n' +
+      'اكتب "تأكيد" للمتابعة:'
+    );
+
+    if (confirmText !== 'تأكيد') {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Bulk reset all orders in one API call
+      const res = await fetch(`${API_URL}/warehouse/orders/reset-all`, {
+        method: 'POST'
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'فشل في إعادة التعيين');
+      }
+
+      alert(`✓ تم إعادة تعيين ${data.count} طلب بنجاح`);
+      loadData();
+    } catch (error) {
+      console.error('خطأ في إعادة تعيين الطلبات:', error);
+      alert('فشل في إعادة تعيين الطلبات');
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     loadData();
@@ -103,16 +196,59 @@ export default function AdminOrdersPage() {
 
   const pendingRequests = editRequests.filter((r) => r.status === "pending");
 
+  const filteredOrders = orders.filter(order => {
+    if (filterStatus === "all") return true;
+    if (filterStatus === "has_issues") return order.warehouse_status === "has_issues";
+    if (filterStatus === "completed") return order.warehouse_status === "completed";
+    if (filterStatus === "pending") return order.warehouse_status === "pending";
+    if (filterStatus === "in_progress") return order.warehouse_status === "in_progress";
+    return true;
+  });
+
+  const ordersWithIssues = orders.filter(o => o.warehouse_status === "has_issues");
+
   return (
     <div className="min-h-screen bg-gray-50 p-8" dir="rtl">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-primary">الطلبات</h1>
-          <div className="bg-white rounded-lg shadow px-6 py-3">
-            <span className="text-gray-600 ml-2">عدد المسجلين:</span>
-            <span className="text-2xl font-bold text-primary">{orders.length}</span>
+          <div className="flex gap-4 items-center">
+            <button
+              onClick={resetAllOrders}
+              className="bg-error text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center gap-2"
+            >
+              <span>إعادة تجهيز كل الطلبات</span>
+            </button>
+            <button
+              onClick={copyWarehouseLink}
+              className="bg-success text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center gap-2"
+            >
+              <span>📋</span>
+              <span>نسخ رابط المستودع</span>
+            </button>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="border-2 border-gray-300 rounded-lg px-4 py-2 text-lg"
+            >
+              <option value="all">كل الطلبات</option>
+              <option value="pending">بانتظار التجهيز</option>
+              <option value="in_progress">قيد التجهيز</option>
+              <option value="completed">تم التجهيز</option>
+              <option value="has_issues">فيها مشاكل</option>
+            </select>
+            <div className="bg-white rounded-lg shadow px-6 py-3">
+              <span className="text-gray-600 ml-2">عدد المسجلين:</span>
+              <span className="text-2xl font-bold text-primary">{orders.length}</span>
+            </div>
           </div>
         </div>
+
+        {/* {showCopyMessage && (
+          <div className="bg-success text-white p-4 rounded-lg mb-6 text-center font-bold animate-pulse">
+            ✓ تم نسخ رابط المستودع بنجاح!
+          </div>
+        )} */}
 
         {/* إعدادات مهلة التعديل */}
         {/* <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -138,7 +274,7 @@ export default function AdminOrdersPage() {
         </div> */}
 
         {/* Tabs */}
-        {/* <div className="flex gap-4 mb-6">
+        <div className="flex gap-4 mb-6">
           <button
             onClick={() => setActiveTab('orders')}
             className={`px-6 py-3 rounded-lg font-bold transition ${
@@ -150,31 +286,31 @@ export default function AdminOrdersPage() {
             الطلبات ({orders.length})
           </button>
           <button
-            onClick={() => setActiveTab('editRequests')}
+            onClick={() => setActiveTab('issues')}
             className={`px-6 py-3 rounded-lg font-bold transition relative ${
-              activeTab === 'editRequests'
-                ? 'bg-primary text-white'
+              activeTab === 'issues'
+                ? 'bg-error text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-100'
             }`}
           >
-            طلبات التعديل ({editRequests.length})
-            {pendingRequests.length > 0 && (
-              <span className="absolute -top-2 -left-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                {pendingRequests.length}
+            المشاكل ({ordersWithIssues.length})
+            {ordersWithIssues.length > 0 && (
+              <span className="absolute -top-2 -left-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+                {ordersWithIssues.length}
               </span>
             )}
           </button>
-        </div> */}
+        </div>
 
         {/* Orders Tab */}
         {activeTab === "orders" && (
           <div className="space-y-6">
-            {orders.length === 0 ? (
+            {filteredOrders.length === 0 ? (
               <div className="bg-white rounded-lg shadow p-8 text-center text-xl text-gray-600">
                 لا توجد طلبات حالياً
               </div>
             ) : (
-              orders.map((order) => (
+              filteredOrders.map((order) => (
                 <div
                   key={order.id}
                   className="bg-white rounded-lg shadow-lg p-6"
@@ -192,6 +328,16 @@ export default function AdminOrdersPage() {
                           order.created_at,
                         ).toLocaleString("ar-SY")}
                       </p>
+                      {order.worker_name && (
+                        <p className="text-sm text-primary font-bold mt-2">
+                          👷 العامل: {order.worker_name}
+                        </p>
+                      )}
+                      {order.basket_number && (
+                        <p className="text-sm text-success font-bold mt-1">
+                          🧺 رقم السلة: {order.basket_number}
+                        </p>
+                      )}
                     </div>
                     <div className="text-left">
                       <div className="text-3xl font-bold text-primary mb-2">
@@ -200,23 +346,64 @@ export default function AdminOrdersPage() {
                         )}{" "}
                         
                       </div>
-                      <span
-                        className={`px-4 py-2 rounded text-white ${
-                          order.status === "delivered"
-                            ? "bg-success"
+                      <div className="mb-2 text-lg text-gray-700">
+                        <span className="font-bold">الوزن:</span>{" "}
+                        <span className="text-primary font-bold">
+                          {(order.order_items.reduce((sum, item) => 
+                            sum + (item.quantity * (item.products?.unit_weight || 1000)), 0
+                          ) / 1000).toFixed(2)} كغ
+                        </span>
+                        {(order.order_items.reduce((sum, item) => 
+                          sum + (item.quantity * (item.products?.unit_weight || 1000)), 0
+                        ) / 1000) > 15 && (
+                          <span className="mr-2 text-warning">⚠️</span>
+                        )}
+                      </div>
+                      <div className="flex gap-2 flex-wrap justify-end">
+                        <span
+                          className={`px-4 py-2 rounded text-white ${
+                            order.status === "delivered"
+                              ? "bg-success"
+                              : order.status === "prepared"
+                                ? "bg-warning"
+                                : "bg-gray-400"
+                          }`}
+                        >
+                          {order.status === "delivered"
+                            ? "تم التسليم"
                             : order.status === "prepared"
-                              ? "bg-warning"
-                              : "bg-gray-400"
-                        }`}
-                      >
-                        {order.status === "delivered"
-                          ? "تم التسليم"
-                          : order.status === "prepared"
-                            ? "جاهز"
-                            : "قيد التحضير"}
-                      </span>
+                              ? "جاهز"
+                              : "قيد التحضير"}
+                        </span>
+                        <span
+                          className={`px-4 py-2 rounded text-white ${
+                            order.warehouse_status === "completed"
+                              ? "bg-success"
+                              : order.warehouse_status === "has_issues"
+                                ? "bg-error"
+                                : order.warehouse_status === "in_progress"
+                                  ? "bg-warning"
+                                  : "bg-gray-400"
+                          }`}
+                        >
+                          {order.warehouse_status === "completed"
+                            ? "✓ تم التجهيز"
+                            : order.warehouse_status === "has_issues"
+                              ? "⚠️ مشاكل"
+                              : order.warehouse_status === "in_progress"
+                                ? "⏳ قيد التجهيز"
+                                : "⏸️ بانتظار التجهيز"}
+                        </span>
+                      </div>
                     </div>
                   </div>
+
+                  {order.warehouse_notes && (
+                    <div className="mb-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                      <p className="font-bold text-yellow-800 mb-1">ملاحظات المستودع:</p>
+                      <p className="text-yellow-700">{order.warehouse_notes}</p>
+                    </div>
+                  )}
 
                   <div className="border-t pt-4">
                     <h4 className="font-bold mb-3">المواد:</h4>
@@ -225,11 +412,33 @@ export default function AdminOrdersPage() {
                         (item, idx) => (
                           <div
                             key={item.id || idx}
-                            className="flex justify-between items-center bg-gray-50 p-3 rounded"
+                            className={`flex justify-between items-center p-3 rounded ${
+                              item.warehouse_status === 'issue' 
+                                ? 'bg-red-50 border-2 border-red-200' 
+                                : item.warehouse_status === 'checked'
+                                  ? 'bg-green-50 border-2 border-green-200'
+                                  : 'bg-gray-50'
+                            }`}
                           >
-                            <span className="font-medium">
-                              {item.products?.name || "منتج"}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              {item.warehouse_status === 'checked' && (
+                                <span className="text-2xl">✓</span>
+                              )}
+                              {item.warehouse_status === 'issue' && (
+                                <span className="text-2xl">⚠️</span>
+                              )}
+                              <div>
+                                <span className="font-medium block">
+                                  {item.products?.name || "منتج"}
+                                  {item.products?.unit && ` - ${item.products.unit}`}
+                                </span>
+                                {item.warehouse_notes && (
+                                  <span className="text-sm text-red-600 block mt-1">
+                                    {item.warehouse_notes}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="flex gap-4 items-center">
                               <span className="text-gray-600">
                                 الكمية: {item.quantity}
@@ -251,8 +460,128 @@ export default function AdminOrdersPage() {
                       )}
                     </div>
                   </div>
+
+                  {(order.warehouse_status === 'completed' || order.warehouse_status === 'has_issues') && (
+                    <div className="border-t pt-4 mt-4">
+                      <button
+                        onClick={() => resetOrderForPreparation(order.id)}
+                        className="w-full bg-warning text-white px-6 py-3 rounded-lg font-bold hover:opacity-90"
+                      >
+                        🔄 إعادة تجهيز السلة
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* Issues Tab */}
+        {activeTab === "issues" && (
+          <div>
+            {ordersWithIssues.length === 0 ? (
+              <div className="bg-white rounded-lg shadow p-8 text-center">
+                <div className="text-6xl mb-4">✅</div>
+                <p className="text-2xl font-bold text-success mb-2">
+                   لا توجد مشاكل
+                </p>
+                <p className="text-gray-500">
+                  جميع الطلبات تم تجهيزها بنجاح
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-error text-white">
+                      <tr>
+                        <th className="px-4 py-3 text-right">المستفيد</th>
+                        <th className="px-4 py-3 text-right">المادة</th>
+                        <th className="px-4 py-3 text-right">الكمية</th>
+                        <th className="px-4 py-3 text-right">المشكلة</th>
+                        <th className="px-4 py-3 text-right">ملاحظات عامة</th>
+                        <th className="px-4 py-3 text-right">العامل</th>
+                        <th className="px-4 py-3 text-right">التاريخ</th>
+                        <th className="px-4 py-3 text-right">إجراءات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordersWithIssues.map((order) =>
+                        order.order_items
+                          .filter((item) => item.warehouse_status === "issue")
+                          .map((item, idx) => (
+                            <tr
+                              key={`${order.id}-${item.id || idx}`}
+                              className="border-b hover:bg-red-50"
+                            >
+                              <td className="px-4 py-3">
+                                <div className="font-bold">
+                                  {order.recipients?.name}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  {order.recipients?.phone}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 font-medium">
+                                {item.products?.name || "منتج"}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="bg-gray-100 px-3 py-1 rounded">
+                                  {item.quantity}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="bg-red-100 border border-red-300 rounded px-3 py-2">
+                                  {item.warehouse_notes || "لا توجد تفاصيل"}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {order.warehouse_notes ? (
+                                  <div className="bg-yellow-100 border border-yellow-300 rounded px-3 py-2 text-sm">
+                                    {order.warehouse_notes}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {order.worker_name ? (
+                                  <div className="text-sm font-bold text-primary">
+                                    {order.worker_name}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                                {new Date(order.created_at).toLocaleDateString("ar-SY")}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => resolveIssue(order.id)}
+                                    className="bg-success text-white px-3 py-2 rounded text-sm font-bold hover:opacity-90 whitespace-nowrap"
+                                    title="تم حل المشكلة"
+                                  >
+                                    ✓ حل
+                                  </button>
+                                  <button
+                                    onClick={() => resetOrderForPreparation(order.id)}
+                                    className="bg-warning text-white px-3 py-2 rounded text-sm font-bold hover:opacity-90 whitespace-nowrap"
+                                    title="إعادة تجهيز"
+                                  >
+                                    🔄
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </div>
         )}
