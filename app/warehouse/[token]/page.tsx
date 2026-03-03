@@ -51,7 +51,6 @@ export default function WarehousePage() {
   const [completedBaskets, setCompletedBaskets] = useState<number>(0);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
-  const [basketNumberCheckInterval, setBasketNumberCheckInterval] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadWorkerInfo();
@@ -187,26 +186,11 @@ export default function WarehousePage() {
       
       if (!res.ok) throw new Error(data.error);
 
-      // Show confirmation popup with basket number
+      // Show confirmation popup with basket number (already reserved permanently)
       setSelectedOrder({ ...selectedOrder, basketNumber: data.basketNumber });
       setShowConfirmPopup(true);
-
-      // Start checking for better basket numbers every second
-      const interval = setInterval(async () => {
-        try {
-          const checkRes = await fetch(`${API_URL}/warehouse/orders/${selectedOrder.id}/check-basket`);
-          const checkData = await checkRes.json();
-          
-          if (checkData.basketNumber && checkData.basketNumber !== selectedOrder.basketNumber) {
-            // Update to the new (smaller) basket number
-            setSelectedOrder(prev => prev ? { ...prev, basketNumber: checkData.basketNumber } : null);
-          }
-        } catch (err) {
-          console.error('Failed to check basket number:', err);
-        }
-      }, 1000);
-
-      setBasketNumberCheckInterval(interval);
+      
+      // No need to check for basket number updates - it's already reserved!
     } catch (error) {
       alert('فشل في حجز رقم السلة');
       console.error(error);
@@ -216,21 +200,13 @@ export default function WarehousePage() {
   async function confirmComplete() {
     if (!selectedOrder) return;
 
-    // Stop checking for basket number updates
-    if (basketNumberCheckInterval) {
-      clearInterval(basketNumberCheckInterval);
-      setBasketNumberCheckInterval(null);
-    }
-
     setShowConfirmPopup(false);
-
     try {
-      // Confirm the basket number (reserve it permanently)
+      // Confirm the basket number (finalize order)
       await fetch(`${API_URL}/warehouse/orders/${selectedOrder.id}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          basketNumber: selectedOrder.basketNumber,
           workerId: workerId,
           workerName: workerName
         })
@@ -253,14 +229,8 @@ export default function WarehousePage() {
   async function cancelBasket() {
     if (!selectedOrder) return;
 
-    // Stop checking for basket number updates
-    if (basketNumberCheckInterval) {
-      clearInterval(basketNumberCheckInterval);
-      setBasketNumberCheckInterval(null);
-    }
-
     try {
-      // Cancel basket number reservation
+      // Go back to editing (basket number stays reserved)
       await fetch(`${API_URL}/warehouse/orders/${selectedOrder.id}/cancel-basket`, {
         method: 'POST'
       });
@@ -268,7 +238,7 @@ export default function WarehousePage() {
       setShowConfirmPopup(false);
       // Keep the order selected so worker can continue editing
     } catch (error) {
-      alert('فشل في الإلغاء');
+      alert('فشل في الرجوع');
       console.error(error);
     }
   }

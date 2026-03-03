@@ -334,9 +334,12 @@ export default function AdminOrdersPage() {
                         </p>
                       )}
                       {order.basket_number && (
-                        <p className="text-sm text-success font-bold mt-1">
-                          🧺 رقم السلة: {order.basket_number}
-                        </p>
+                        <div className="mt-3 inline-block">
+                          <div className="bg-success text-white px-4 py-2 rounded-lg">
+                            <span className="text-sm">رقم السلة</span>
+                            <span className="text-3xl font-bold ml-2">{order.basket_number}</span>
+                          </div>
+                        </div>
                       )}
                     </div>
                     <div className="text-left">
