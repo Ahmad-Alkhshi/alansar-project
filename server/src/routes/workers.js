@@ -24,7 +24,56 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get worker by token
+// Get worker by token (with device verification)
+router.post('/token/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({ error: 'معرّف الجهاز مطلوب' });
+    }
+
+    const { data: worker, error } = await supabase
+      .from('workers')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (error) throw error;
+    
+    if (!worker) {
+      return res.status(404).json({ error: 'العامل غير موجود' });
+    }
+
+    if (!worker.is_active) {
+      return res.status(403).json({ error: 'هذا الحساب غير نشط' });
+    }
+
+    // Check device restriction
+    if (worker.device_id && worker.device_id !== deviceId) {
+      return res.status(403).json({ 
+        error: 'DEVICE_MISMATCH',
+        message: 'هذا الرابط مفتوح على جهاز آخر' 
+      });
+    }
+
+    // If no device_id set, or same device, update/set device_id
+    if (!worker.device_id || worker.device_id === deviceId) {
+      await supabase
+        .from('workers')
+        .update({ device_id: deviceId })
+        .eq('id', worker.id);
+    }
+
+    res.json(worker);
+  } catch (error) {
+    console.error('Error fetching worker:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get worker by token (legacy GET endpoint - kept for compatibility)
 router.get('/token/:token', async (req, res) => {
   try {
     const { token } = req.params;
@@ -114,13 +163,14 @@ router.post('/', async (req, res) => {
 router.put('/:workerId', async (req, res) => {
   try {
     const { workerId } = req.params;
-    const { name, phone, notes, isActive } = req.body;
+    const { name, phone, notes, isActive, deviceId } = req.body;
 
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
     if (notes !== undefined) updates.notes = notes;
     if (isActive !== undefined) updates.is_active = isActive;
+    if (deviceId !== undefined) updates.device_id = deviceId; // Allow null to reset
     updates.updated_at = new Date().toISOString();
 
     const { data: worker, error } = await supabase

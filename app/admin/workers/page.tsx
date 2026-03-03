@@ -150,6 +150,27 @@ export default function WorkersPage() {
     }
   }
 
+  async function resetDevice(worker: Worker) {
+    if (!confirm(`هل تريد إعادة تعيين الجهاز لـ ${worker.name}؟\n\nسيتمكن من فتح الرابط على جهاز جديد`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/workers/${worker.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: null })
+      });
+
+      if (!res.ok) throw new Error('فشل في إعادة التعيين');
+
+      alert('✓ تم إعادة تعيين الجهاز بنجاح');
+      loadWorkers();
+    } catch (error) {
+      alert('فشل في إعادة تعيين الجهاز');
+    }
+  }
+
   async function deleteWorker(worker: Worker) {
     if (!confirm(`هل تريد حذف العامل ${worker.name}؟\n\nتحذير: لن يتم حذف السلات التي جهزها.`)) {
       return;
@@ -369,6 +390,13 @@ export default function WorkersPage() {
                             title={worker.is_active ? 'تعطيل' : 'تفعيل'}
                           >
                             {worker.is_active ? '🚫' : '✓'}
+                          </button>
+                          <button
+                            onClick={() => resetDevice(worker)}
+                            className="bg-purple-500 text-white px-3 py-1 rounded text-sm font-bold hover:opacity-90"
+                            title="إعادة تعيين الجهاز"
+                          >
+                            📱🔄
                           </button>
                           <button
                             onClick={() => deleteWorker(worker)}

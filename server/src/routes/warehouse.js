@@ -10,7 +10,7 @@ const supabase = createClient(
 // Get all orders ready for warehouse
 router.get('/orders', async (req, res) => {
   try {
-    // جلب الطلبات المتاحة فقط (بدون حساب orderNumber)
+    // جلب الطلبات المتاحة والطلبات قيد التجهيز
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -21,7 +21,7 @@ router.get('/orders', async (req, res) => {
           products (id, name, price, display_order, unit_weight, unit)
         )
       `)
-      .eq('warehouse_status', 'pending')
+      .in('warehouse_status', ['pending', 'in_progress', 'preparing_complete', 'has_issues'])
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -60,45 +60,10 @@ router.post('/orders/:orderId/lock', async (req, res) => {
     const { orderId } = req.params;
     const { workerId } = req.body;
 
-    // First, get all previous orders locked by this worker that are not completed
-    const { data: previousOrders } = await supabase
-      .from('orders')
-      .select('id')
-      .eq('warehouse_locked_by', workerId)
-      .in('warehouse_status', ['in_progress', 'preparing_complete', 'has_issues']);
+    // DON'T unlock previous orders - let worker keep their work after refresh
+    // Only unlock if they're selecting a DIFFERENT order
 
-    // Reset items for all previous orders
-    if (previousOrders && previousOrders.length > 0) {
-      const orderIds = previousOrders.map(o => o.id);
-      
-      // Reset all order items to pending
-      await supabase
-        .from('order_items')
-        .update({
-          warehouse_status: 'pending',
-          warehouse_notes: null
-        })
-        .in('order_id', orderIds);
-
-      console.log(`Reset items for ${orderIds.length} previous orders`);
-    }
-
-    // Now unlock the orders
-    await supabase
-      .from('orders')
-      .update({
-        warehouse_status: 'pending',
-        warehouse_locked_by: null,
-        warehouse_locked_at: null,
-        basket_number: null,
-        basket_number_reserved: null
-      })
-      .eq('warehouse_locked_by', workerId)
-      .in('warehouse_status', ['in_progress', 'preparing_complete', 'has_issues']);
-
-    console.log(`Unlocked previous orders for worker: ${workerId}`);
-
-    // Check if order exists and is still pending
+    // Check if order exists and its current status
     const { data: existingOrder } = await supabase
       .from('orders')
       .select('warehouse_status, warehouse_locked_by, warehouse_locked_at')
@@ -109,6 +74,17 @@ router.post('/orders/:orderId/lock', async (req, res) => {
       return res.status(404).json({ error: 'الطلب غير موجود' });
     }
 
+    // If order is already locked by this worker, just return it (refresh case)
+    if (existingOrder.warehouse_locked_by === workerId) {
+      console.log(`Order ${orderId} already locked by worker ${workerId} - refresh case`);
+      const { data } = await supabase
+        .from('orders')
+        .select()
+        .eq('id', orderId)
+        .single();
+      return res.json(data);
+    }
+
     // Check if order is not pending anymore
     if (existingOrder.warehouse_status !== 'pending') {
       return res.status(409).json({ 
@@ -116,8 +92,8 @@ router.post('/orders/:orderId/lock', async (req, res) => {
       });
     }
 
-    // Check if order is already locked
-    if (existingOrder.warehouse_locked_by) {
+    // Check if order is already locked by another worker
+    if (existingOrder.warehouse_locked_by && existingOrder.warehouse_locked_by !== workerId) {
       // Check if lock is older than 30 minutes (expired)
       const lockedAt = new Date(existingOrder.warehouse_locked_at);
       const now = new Date();
@@ -273,17 +249,19 @@ router.post('/orders/:orderId/confirm', async (req, res) => {
   }
 });
 
-// Go back to editing (keep basket number reserved)
+// Go back to editing (clear basket number but keep order locked)
 router.post('/orders/:orderId/cancel-basket', async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // Change status back to in_progress but KEEP basket number reserved
+    // Change status back to in_progress and CLEAR basket number
     const { data, error } = await supabase
       .from('orders')
       .update({
         warehouse_status: 'in_progress',
-        warehouse_notes: null
+        warehouse_notes: null,
+        basket_number: null,
+        basket_number_reserved: null
       })
       .eq('id', orderId)
       .select()
@@ -291,20 +269,8 @@ router.post('/orders/:orderId/cancel-basket', async (req, res) => {
 
     if (error) throw error;
 
-    // Reset all order items to pending (clear worker selections)
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .update({
-        warehouse_status: 'pending',
-        warehouse_notes: null
-      })
-      .eq('order_id', orderId);
-
-    if (itemsError) {
-      console.error('Error resetting order items:', itemsError);
-    }
-
-    console.log(`Order ${orderId} went back to editing, basket number still reserved: ${data.basket_number}`);
+    // Keep order items as they are (don't reset - worker keeps selections after refresh)
+    console.log(`Order ${orderId} went back to editing, basket number cleared, items kept`);
     res.json(data);
   } catch (error) {
     console.error('Error going back:', error);

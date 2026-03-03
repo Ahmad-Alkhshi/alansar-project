@@ -25,6 +25,7 @@ interface Order {
   id: string;
   orderNumber: number;
   basketNumber?: number;
+  basket_number?: number; // API returns this
   final_total: number;
   warehouse_status: string;
   warehouse_locked_by: string | null;
@@ -45,12 +46,14 @@ export default function WarehousePage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [generalNotes, setGeneralNotes] = useState("");
   const [workerId, setWorkerId] = useState<string | null>(null);
   const [workerName, setWorkerName] = useState<string>("");
   const [completedBaskets, setCompletedBaskets] = useState<number>(0);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+  const [confirmedBasketNumber, setConfirmedBasketNumber] = useState<number | null>(null);
 
   useEffect(() => {
     loadWorkerInfo();
@@ -59,17 +62,40 @@ export default function WarehousePage() {
   useEffect(() => {
     if (workerId) {
       loadOrders();
-      const interval = setInterval(loadOrders, 2000);
+      const interval = setInterval(() => {
+        // Don't update if confirmation popup is showing OR if order is selected
+        if (!showConfirmPopup && !selectedOrder) {
+          loadOrders();
+        }
+      }, 2000);
       return () => clearInterval(interval);
     }
-  }, [workerId]);
+  }, [workerId, showConfirmPopup, selectedOrder]);
 
   async function loadWorkerInfo() {
     try {
-      const res = await fetch(`${API_URL}/workers/token/${token}`);
+      // Generate or get device ID
+      let deviceId = localStorage.getItem('device_id');
+      if (!deviceId) {
+        deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('device_id', deviceId);
+      }
+
+      const res = await fetch(`${API_URL}/workers/token/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId })
+      });
       
       if (!res.ok) {
         const error = await res.json();
+        
+        if (error.error === 'DEVICE_MISMATCH') {
+          alert('⚠️ هذا الرابط مفتوح على جهاز آخر\n\nلا يمكن فتح الرابط على أكثر من جهاز في نفس الوقت');
+          setLoading(false);
+          return;
+        }
+        
         alert(error.error || 'رابط غير صالح');
         setLoading(false);
         return;
@@ -97,12 +123,35 @@ export default function WarehousePage() {
       const res = await fetch(`${API_URL}/warehouse/orders`);
       const data = await res.json();
       console.log('📦 Warehouse orders loaded:', data.length, 'orders');
-      console.log('Available orders:', data.filter((o: Order) => o.warehouse_status === 'pending').length);
+      
       setOrders(data);
-      setLoading(false);
+      
+      // Check if worker has a locked order (restore state after refresh)
+      const myLockedOrder = data.find((o: Order) => 
+        o.warehouse_locked_by === workerId && 
+        (o.warehouse_status === 'in_progress' || o.warehouse_status === 'preparing_complete' || o.warehouse_status === 'has_issues')
+      );
+      
+      if (myLockedOrder && !selectedOrder) {
+        // Restore the locked order after refresh
+        console.log('🔄 Restoring locked order after refresh:', myLockedOrder.id);
+        setSelectedOrder({
+          ...myLockedOrder,
+          basketNumber: myLockedOrder.basket_number || myLockedOrder.basketNumber
+        });
+      }
+      // Don't update selectedOrder if worker is actively working on it
+      // This prevents flickering when selecting items
+      
+      // Only hide loading after we've determined the state
+      if (!initialLoadComplete) {
+        setInitialLoadComplete(true);
+        setLoading(false);
+      }
     } catch (err) {
       console.error('Error loading orders:', err);
       setLoading(false);
+      setInitialLoadComplete(true);
     }
   }
 
@@ -138,7 +187,7 @@ export default function WarehousePage() {
   }
 
   async function updateItemStatus(itemId: string, status: string, notes?: string) {
-    // تحديث الواجهة فوراً (optimistic update)
+    // تحديث الواجهة فقط (لا نرسل للسيرفر)
     if (selectedOrder) {
       const updatedItems = selectedOrder.order_items.map(item =>
         item.id === itemId
@@ -147,19 +196,8 @@ export default function WarehousePage() {
       );
       setSelectedOrder({ ...selectedOrder, order_items: updatedItems });
     }
-
-    // إرسال للسيرفر بالخلفية
-    try {
-      await fetch(`${API_URL}/warehouse/items/${itemId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, notes })
-      });
-    } catch (err) {
-      console.error('فشل في تحديث حالة المادة:', err);
-      // في حال فشل، يمكن إعادة تحميل البيانات
-      // await loadOrders();
-    }
+    
+    // لا نرسل للسيرفر - سيتم الإرسال عند الضغط على "تم التجهيز"
   }
 
   async function completeOrder() {
@@ -175,7 +213,22 @@ export default function WarehousePage() {
     }
 
     try {
-      // Reserve basket number
+      // أولاً: إرسال حالة كل المواد للباك إند
+      const itemUpdates = selectedOrder.order_items.map(item => 
+        fetch(`${API_URL}/warehouse/items/${item.id}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            status: item.warehouse_status, 
+            notes: item.warehouse_notes 
+          })
+        })
+      );
+      
+      await Promise.all(itemUpdates);
+      console.log('✓ تم حفظ حالة جميع المواد');
+
+      // ثانياً: حجز رقم السلة
       const res = await fetch(`${API_URL}/warehouse/orders/${selectedOrder.id}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -186,11 +239,9 @@ export default function WarehousePage() {
       
       if (!res.ok) throw new Error(data.error);
 
-      // Show confirmation popup with basket number (already reserved permanently)
-      setSelectedOrder({ ...selectedOrder, basketNumber: data.basketNumber });
+      // Save basket number in separate state to prevent it from disappearing
+      setConfirmedBasketNumber(data.basketNumber);
       setShowConfirmPopup(true);
-      
-      // No need to check for basket number updates - it's already reserved!
     } catch (error) {
       alert('فشل في حجز رقم السلة');
       console.error(error);
@@ -201,6 +252,8 @@ export default function WarehousePage() {
     if (!selectedOrder) return;
 
     setShowConfirmPopup(false);
+    setConfirmedBasketNumber(null);
+    
     try {
       // Confirm the basket number (finalize order)
       await fetch(`${API_URL}/warehouse/orders/${selectedOrder.id}/confirm`, {
@@ -238,15 +291,10 @@ export default function WarehousePage() {
       if (!res.ok) throw new Error('Failed to cancel basket');
 
       setShowConfirmPopup(false);
+      setConfirmedBasketNumber(null);
       
       // Reload the order to get fresh state with reset items
-      const orderRes = await fetch(`${API_URL}/warehouse/orders`);
-      const allOrders = await orderRes.json();
-      const refreshedOrder = allOrders.find((o: Order) => o.id === selectedOrder.id);
-      
-      if (refreshedOrder) {
-        setSelectedOrder(refreshedOrder);
-      }
+      await loadOrders();
     } catch (error) {
       alert('فشل في الرجوع');
       console.error(error);
@@ -298,9 +346,9 @@ export default function WarehousePage() {
 
     return (
       <div className="min-h-screen bg-gray-50 pb-32" dir="rtl">
-        <div className="bg-primary text-white py-6 px-4 shadow-lg sticky top-0 z-10">
+        <div className="bg-primary text-white py-4 px-4 shadow-lg sticky top-0 z-10">
           <div className="max-w-4xl mx-auto">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center mb-3">
               <div>
                 <p className="text-lg">ملف رقم: {fileNumber}</p>
               </div>
@@ -309,11 +357,58 @@ export default function WarehousePage() {
                 <div className="text-3xl font-bold">{completedBaskets} سلة</div>
               </div>
             </div>
+            
+            {/* ملخص المواد المختارة - ثابت في الأعلى */}
+            <div className="bg-white bg-opacity-20 rounded-lg p-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-xs mb-1">عدد المواد المختارة</div>
+                  <div className="text-2xl font-bold">
+                    {selectedOrder.order_items
+                      .reduce((sum, item) => {
+                        // إذا checked، نجمع الكمية كاملة
+                        if (item.warehouse_status === 'checked') {
+                          return sum + item.quantity;
+                        }
+                        // إذا في نقص مع رقم، نطرح النقص من الكمية
+                        if (item.warehouse_status === 'issue' && item.warehouse_notes) {
+                          const shortage = parseInt(item.warehouse_notes) || 0;
+                          return sum + (item.quantity - shortage);
+                        }
+                        // إذا issue بدون رقم، ما نحسبه
+                        return sum;
+                      }, 0)}
+                    <span className="text-sm"> من أصل {selectedOrder.order_items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs mb-1">وزن المواد المختارة</div>
+                  <div className="text-2xl font-bold text-yellow-300">
+                    {(selectedOrder.order_items
+                      .reduce((sum, item) => {
+                        // إذا checked، نحسب الوزن كامل
+                        if (item.warehouse_status === 'checked') {
+                          return sum + (item.quantity * (item.products.unit_weight || 1000));
+                        }
+                        // إذا في نقص مع رقم، نطرح وزن النقص
+                        if (item.warehouse_status === 'issue' && item.warehouse_notes) {
+                          const shortage = parseInt(item.warehouse_notes) || 0;
+                          const actualQuantity = item.quantity - shortage;
+                          return sum + (actualQuantity * (item.products.unit_weight || 1000));
+                        }
+                        // إذا issue بدون رقم، ما نحسبه
+                        return sum;
+                      }, 0) / 1000).toFixed(2)} كغ
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">المواد المطلوبة:</h2>
               <div className="text-right">
@@ -330,7 +425,14 @@ export default function WarehousePage() {
                 <div key={item.id} className="flex gap-2 items-stretch">
                   {/* زر المادة الكبير */}
                   <button
-                    onClick={() => updateItemStatus(item.id, 'checked')}
+                    onClick={() => {
+                      // Toggle: إذا checked يرجع pending، إذا pending أو issue يصير checked
+                      if (item.warehouse_status === 'checked') {
+                        updateItemStatus(item.id, 'pending');
+                      } else {
+                        updateItemStatus(item.id, 'checked');
+                      }
+                    }}
                     className={`flex-1 py-1 px-4 rounded-lg font-bold text-xl ${
                       item.warehouse_status === 'checked'
                         ? 'bg-success text-white'
@@ -386,15 +488,27 @@ export default function WarehousePage() {
               ))}
             </div>
 
-            {/* تنبيه الوزن الزائد */}
-            {(selectedOrder.order_items.reduce((sum, item) => 
-              sum + (item.quantity * (item.products.unit_weight || 1000)), 0
-            ) / 1000) > 15 && (
+            {/* تنبيه الوزن الزائد - بناءً على المواد المختارة فقط مع طرح النقص */}
+            {(selectedOrder.order_items
+              .reduce((sum, item) => {
+                // إذا checked، نحسب الوزن كامل
+                if (item.warehouse_status === 'checked') {
+                  return sum + (item.quantity * (item.products.unit_weight || 1000));
+                }
+                // إذا في نقص مع رقم، نطرح وزن النقص
+                if (item.warehouse_status === 'issue' && item.warehouse_notes) {
+                  const shortage = parseInt(item.warehouse_notes) || 0;
+                  const actualQuantity = item.quantity - shortage;
+                  return sum + (actualQuantity * (item.products.unit_weight || 1000));
+                }
+                // إذا issue بدون رقم، ما نحسبه
+                return sum;
+              }, 0) / 1000) > 15 && (
               <div className="mt-6 bg-warning text-white p-6 rounded-lg border-4 border-yellow-600">
                 <div className="flex items-center gap-3">
                   <span className="text-4xl">⚠️</span>
                   <div>
-                    <p className="text-xl font-bold">تنبيه: وزن السلة أكثر من 15 كغ</p>
+                    <p className="text-xl font-bold">تنبيه: وزن المواد المختارة أكثر من 15 كغ</p>
                     <p className="text-lg mt-1">أضف كيس آخر إلى السلة</p>
                   </div>
                 </div>
@@ -439,13 +553,13 @@ export default function WarehousePage() {
         </div>
 
         {/* Confirmation Popup */}
-        {showConfirmPopup && (
+        {showConfirmPopup && confirmedBasketNumber && (
           <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg p-8 max-w-md w-full">
               <div className="text-center mb-6">
                 <div className="text-sm text-gray-600 mb-2">رقم السلة</div>
                 <div className="text-9xl font-bold text-primary mb-4">
-                  {selectedOrder.basketNumber}
+                  {confirmedBasketNumber}
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-3">
                   يرجى ترقيم السلة

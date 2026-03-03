@@ -198,17 +198,35 @@ export default function AdminRecipientsPage() {
   }
 
   function exportToExcel() {
-    const data = recipients.map(r => ({
-      'الاسم': r.name,
-      'رقم الملف': r.phone,
-      'قيمة السلة': r.basketLimit || 500000,
-      'الرابط': `${window.location.origin}/claim/${r.token}`
-    }))
+    const data = recipients.map(r => {
+      // Format last seen
+      let lastSeenText = 'لم يتصل بعد';
+      if (r.last_seen) {
+        const status = getOnlineStatus(r.last_seen);
+        lastSeenText = status.text;
+      }
+      
+      // Format basket status
+      let basketStatusText = 'غير جاهزة';
+      if (r.basketStatus === 'completed' && r.basketNumber) {
+        basketStatusText = `جاهزة - رقم ${r.basketNumber}`;
+      }
+      
+      return {
+        'الاسم': r.name,
+        'رقم الملف': r.phone,
+        'الجنس': r.gender === 'female' ? 'أنثى' : 'ذكر',
+        'قيمة السلة': r.basketLimit || 500000,
+        'حالة السلة': basketStatusText,
+        'آخر ظهور': lastSeenText,
+        'الرابط': `${window.location.origin}/claim/${r.token}`
+      };
+    });
     
-    const ws = XLSX.utils.json_to_sheet(data)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'المستفيدين')
-    XLSX.writeFile(wb, 'قائمة_المستفيدين.xlsx')
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'المستفيدين');
+    XLSX.writeFile(wb, 'قائمة_المستفيدين.xlsx');
   }
 
   function downloadTemplate() {
