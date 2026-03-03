@@ -60,8 +60,30 @@ router.post('/orders/:orderId/lock', async (req, res) => {
     const { orderId } = req.params;
     const { workerId } = req.body;
 
-    // First, unlock any previous orders locked by this worker that are not completed
-    // This handles the case when worker refreshes the page
+    // First, get all previous orders locked by this worker that are not completed
+    const { data: previousOrders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('warehouse_locked_by', workerId)
+      .in('warehouse_status', ['in_progress', 'preparing_complete', 'has_issues']);
+
+    // Reset items for all previous orders
+    if (previousOrders && previousOrders.length > 0) {
+      const orderIds = previousOrders.map(o => o.id);
+      
+      // Reset all order items to pending
+      await supabase
+        .from('order_items')
+        .update({
+          warehouse_status: 'pending',
+          warehouse_notes: null
+        })
+        .in('order_id', orderIds);
+
+      console.log(`Reset items for ${orderIds.length} previous orders`);
+    }
+
+    // Now unlock the orders
     await supabase
       .from('orders')
       .update({
@@ -167,33 +189,28 @@ router.post('/orders/:orderId/complete', async (req, res) => {
     const { orderId } = req.params;
     const { notes } = req.body;
 
-    // Check if this order already has a basket number reserved
-    const { data: existingOrder } = await supabase
+    // Always recalculate basket number to find the smallest available number
+    // Get all basket numbers currently in use
+    const { data: ordersWithBaskets } = await supabase
       .from('orders')
       .select('basket_number')
-      .eq('id', orderId)
-      .single();
+      .not('basket_number', 'is', null)
+      .neq('id', orderId) // Exclude current order
+      .order('basket_number', { ascending: true });
 
-    let basketNumber = existingOrder?.basket_number;
-
-    // If no basket number exists, calculate and reserve a new one
-    if (!basketNumber) {
-      // Get the highest basket number from ALL orders (regardless of status)
-      const { data: allOrders } = await supabase
-        .from('orders')
-        .select('basket_number')
-        .not('basket_number', 'is', null)
-        .order('basket_number', { ascending: false })
-        .limit(1);
-
-      // Next number = highest number + 1 (or 1 if no orders with basket numbers)
-      const highestNumber = allOrders?.[0]?.basket_number || 0;
-      basketNumber = highestNumber + 1;
-      
-      console.log(`Calculating new basket number: highest=${highestNumber}, next=${basketNumber}`);
-    } else {
-      console.log(`Order ${orderId} already has basket number: ${basketNumber}`);
+    const usedNumbers = ordersWithBaskets?.map(o => o.basket_number) || [];
+    
+    // Find the smallest available number
+    let basketNumber = 1;
+    for (const num of usedNumbers) {
+      if (num === basketNumber) {
+        basketNumber++;
+      } else if (num > basketNumber) {
+        break; // Found a gap
+      }
     }
+    
+    console.log(`Calculating basket number for order ${orderId}: used=${usedNumbers.join(',')}, assigned=${basketNumber}`);
 
     // Check if any items have issues
     const { data: items } = await supabase
@@ -204,7 +221,7 @@ router.post('/orders/:orderId/complete', async (req, res) => {
     const hasIssues = items?.some(item => item.warehouse_status === 'issue');
     const finalStatus = hasIssues ? 'has_issues' : 'preparing_complete';
 
-    // Update status AND reserve/keep the basket number
+    // Update status AND reserve the basket number
     const { data, error } = await supabase
       .from('orders')
       .update({
@@ -261,37 +278,12 @@ router.post('/orders/:orderId/cancel-basket', async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // Just change status back to in_progress
-    // Keep basket_number and basket_number_reserved as they are
+    // Change status back to in_progress but KEEP basket number reserved
     const { data, error } = await supabase
       .from('orders')
       .update({
-        warehouse_status: 'in_progress'
-      })
-      .eq('id', orderId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    res.json(data);
-  } catch (error) {
-    console.error('Error going back:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Unlock order (cancel processing)
-router.post('/orders/:orderId/unlock', async (req, res) => {
-  try {
-    const { orderId } = req.params;
-
-    // Reset order status
-    const { data, error } = await supabase
-      .from('orders')
-      .update({
-        warehouse_status: 'pending',
-        warehouse_locked_by: null,
-        warehouse_locked_at: null
+        warehouse_status: 'in_progress',
+        warehouse_notes: null
       })
       .eq('id', orderId)
       .select()
@@ -312,6 +304,50 @@ router.post('/orders/:orderId/unlock', async (req, res) => {
       console.error('Error resetting order items:', itemsError);
     }
 
+    console.log(`Order ${orderId} went back to editing, basket number still reserved: ${data.basket_number}`);
+    res.json(data);
+  } catch (error) {
+    console.error('Error going back:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unlock order (cancel processing)
+router.post('/orders/:orderId/unlock', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Reset order status and clear basket number
+    const { data, error } = await supabase
+      .from('orders')
+      .update({
+        warehouse_status: 'pending',
+        warehouse_locked_by: null,
+        warehouse_locked_at: null,
+        basket_number: null,
+        basket_number_reserved: null,
+        warehouse_notes: null
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Reset all order items to pending (clear worker selections)
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .update({
+        warehouse_status: 'pending',
+        warehouse_notes: null
+      })
+      .eq('order_id', orderId);
+
+    if (itemsError) {
+      console.error('Error resetting order items:', itemsError);
+    }
+
+    console.log(`Order ${orderId} unlocked and reset completely`);
     res.json(data);
   } catch (error) {
     console.error('Error unlocking order:', error);

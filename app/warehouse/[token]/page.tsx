@@ -230,13 +230,23 @@ export default function WarehousePage() {
     if (!selectedOrder) return;
 
     try {
-      // Go back to editing (basket number stays reserved)
-      await fetch(`${API_URL}/warehouse/orders/${selectedOrder.id}/cancel-basket`, {
+      // Go back to editing and reset items
+      const res = await fetch(`${API_URL}/warehouse/orders/${selectedOrder.id}/cancel-basket`, {
         method: 'POST'
       });
 
+      if (!res.ok) throw new Error('Failed to cancel basket');
+
       setShowConfirmPopup(false);
-      // Keep the order selected so worker can continue editing
+      
+      // Reload the order to get fresh state with reset items
+      const orderRes = await fetch(`${API_URL}/warehouse/orders`);
+      const allOrders = await orderRes.json();
+      const refreshedOrder = allOrders.find((o: Order) => o.id === selectedOrder.id);
+      
+      if (refreshedOrder) {
+        setSelectedOrder(refreshedOrder);
+      }
     } catch (error) {
       alert('فشل في الرجوع');
       console.error(error);

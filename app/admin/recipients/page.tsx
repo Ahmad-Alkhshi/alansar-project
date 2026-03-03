@@ -18,6 +18,8 @@ interface Recipient {
   linkActive: boolean
   gender?: string
   last_seen?: string
+  basketNumber?: number | null
+  basketStatus?: string
 }
 
 export default function AdminRecipientsPage() {
@@ -32,6 +34,7 @@ export default function AdminRecipientsPage() {
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' })
   const [showProgress, setShowProgress] = useState(false)
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all')
+  const [basketFilter, setBasketFilter] = useState<'all' | 'ready' | 'not_ready'>('all')
 
   useEffect(() => {
     loadRecipients()
@@ -50,7 +53,9 @@ export default function AdminRecipientsPage() {
         linkDurationDays: r.link_duration_days || r.linkDurationDays || 2,
         linkActive: r.link_active !== undefined ? r.link_active : (r.linkActive !== undefined ? r.linkActive : true),
         gender: r.gender || 'male',
-        last_seen: r.last_seen
+        last_seen: r.last_seen,
+        basketNumber: r.basket_number,
+        basketStatus: r.basket_status
       }))
       setRecipients(recipients)
     } catch (error) {
@@ -305,12 +310,22 @@ export default function AdminRecipientsPage() {
     return <div className="p-8 text-center">جاري التحميل...</div>
   }
 
-  // فلترة المستفيدين حسب الحالة
+  // فلترة المستفيدين حسب الحالة والسلة
   const filteredRecipients = recipients.filter(recipient => {
-    if (statusFilter === 'all') return true;
-    const status = getOnlineStatus(recipient.last_seen);
-    if (statusFilter === 'online') return status.online;
-    if (statusFilter === 'offline') return !status.online;
+    // فلتر الحالة (متصل/غير متصل)
+    if (statusFilter !== 'all') {
+      const status = getOnlineStatus(recipient.last_seen);
+      if (statusFilter === 'online' && !status.online) return false;
+      if (statusFilter === 'offline' && status.online) return false;
+    }
+    
+    // فلتر السلة (جاهزة/غير جاهزة)
+    if (basketFilter !== 'all') {
+      const isReady = recipient.basketStatus === 'completed' && recipient.basketNumber;
+      if (basketFilter === 'ready' && !isReady) return false;
+      if (basketFilter === 'not_ready' && isReady) return false;
+    }
+    
     return true;
   });
 
@@ -485,6 +500,20 @@ export default function AdminRecipientsPage() {
                 <th className="p-4 text-right">رقم الملف</th>
                 <th className="p-4 text-right">الجنس</th>
                 <th className="p-4 text-right">قيمة السلة</th>
+                <th className="p-4 text-right">
+                  <div className="flex items-center gap-2">
+                    حالة السلة
+                    <select
+                      value={basketFilter}
+                      onChange={(e) => setBasketFilter(e.target.value as 'all' | 'ready' | 'not_ready')}
+                      className="bg-white text-primary border border-white rounded px-2 py-1 text-sm cursor-pointer"
+                    >
+                      <option value="all">الكل</option>
+                      <option value="ready">جاهزة</option>
+                      <option value="not_ready">غير جاهزة</option>
+                    </select>
+                  </div>
+                </th>
                 <th className="p-4 text-right">حالة الرابط</th>
                 <th className="p-4 text-right">
                   <div className="flex items-center gap-2">
@@ -521,6 +550,17 @@ export default function AdminRecipientsPage() {
                   <td className="p-4">{recipient.phone}</td>
                   <td className="p-4">{recipient.gender === 'female' ? 'أنثى' : 'ذكر'}</td>
                   <td className="p-4 font-bold text-primary">{(recipient.basketLimit || 500000).toLocaleString('ar-SY')} </td>
+                  <td className="p-4">
+                    {recipient.basketStatus === 'completed' && recipient.basketNumber ? (
+                      <span className="bg-success text-white px-3 py-1 rounded-lg font-bold text-lg">
+                        {recipient.basketNumber}
+                      </span>
+                    ) : (
+                      <span className="bg-gray-300 text-gray-700 px-3 py-1 rounded-lg font-bold text-sm">
+                        غير جاهزة
+                      </span>
+                    )}
+                  </td>
                   <td className="p-4">
                     <button
                       onClick={() => toggleLinkActive(recipient.id, recipient.linkActive)}

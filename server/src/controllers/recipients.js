@@ -27,16 +27,43 @@ export const createRecipient = async (req, res) => {
 
 export const getAllRecipients = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    // Get all recipients
+    const { data: recipients, error: recipientsError } = await supabase
       .from('recipients')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (recipientsError) throw recipientsError;
 
-    res.json(data);
+    // Get all completed orders with basket numbers
+    const { data: completedOrders, error: ordersError } = await supabase
+      .from('orders')
+      .select('recipient_id, warehouse_status, basket_number')
+      .eq('warehouse_status', 'completed')
+      .not('basket_number', 'is', null);
+
+    if (ordersError) {
+      console.error('Error fetching orders:', ordersError);
+      // Continue without orders data
+    }
+
+    // Map basket status to recipients
+    const recipientsWithBasketStatus = recipients.map(recipient => {
+      const completedOrder = completedOrders?.find(
+        order => order.recipient_id === recipient.id
+      );
+
+      return {
+        ...recipient,
+        basket_status: completedOrder ? 'completed' : 'pending',
+        basket_number: completedOrder?.basket_number || null
+      };
+    });
+
+    res.json(recipientsWithBasketStatus);
   } catch (error) {
-    res.status(500).json({ error: 'فشل في جلب المستفيدين' });
+    console.error('Error fetching recipients:', error);
+    res.status(500).json({ error: 'فشل في جلب المستفيدين', details: error.message });
   }
 };
 
