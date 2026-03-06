@@ -54,6 +54,7 @@ export default function WarehousePage() {
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [confirmedBasketNumber, setConfirmedBasketNumber] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadWorkerInfo();
@@ -122,26 +123,26 @@ export default function WarehousePage() {
     try {
       const res = await fetch(`${API_URL}/warehouse/orders`);
       const data = await res.json();
-      console.log('📦 Warehouse orders loaded:', data.length, 'orders');
+      console.log('📦 Warehouse orders loaded:', data.length, 'pending orders');
       
+      // API الآن يرجع فقط الطلبات pending لتحسين الأداء
       setOrders(data);
       
       // Check if worker has a locked order (restore state after refresh)
-      const myLockedOrder = data.find((o: Order) => 
-        o.warehouse_locked_by === workerId && 
-        (o.warehouse_status === 'in_progress' || o.warehouse_status === 'preparing_complete' || o.warehouse_status === 'has_issues')
-      );
-      
-      if (myLockedOrder && !selectedOrder) {
-        // Restore the locked order after refresh
-        console.log('🔄 Restoring locked order after refresh:', myLockedOrder.id);
-        setSelectedOrder({
-          ...myLockedOrder,
-          basketNumber: myLockedOrder.basket_number || myLockedOrder.basketNumber
-        });
+      // نحتاج جلب الطلب المقفول من API منفصل
+      if (workerId && !selectedOrder) {
+        const lockedRes = await fetch(`${API_URL}/warehouse/orders/my-locked/${workerId}`);
+        if (lockedRes.ok) {
+          const myLockedOrder = await lockedRes.json();
+          if (myLockedOrder) {
+            console.log('🔄 Restoring locked order after refresh:', myLockedOrder.id);
+            setSelectedOrder({
+              ...myLockedOrder,
+              basketNumber: myLockedOrder.basket_number || myLockedOrder.basketNumber
+            });
+          }
+        }
       }
-      // Don't update selectedOrder if worker is actively working on it
-      // This prevents flickering when selecting items
       
       // Only hide loading after we've determined the state
       if (!initialLoadComplete) {
@@ -339,10 +340,10 @@ export default function WarehousePage() {
   }
 
   if (selectedOrder) {
-    const allChecked = selectedOrder.order_items.every(
+    const allChecked = selectedOrder.order_items?.every(
       item => item.warehouse_status === 'checked' || item.warehouse_status === 'issue'
-    );
-    const fileNumber = selectedOrder.recipients.fileNumber || selectedOrder.recipients.phone;
+    ) ?? false;
+    const fileNumber = selectedOrder.recipients?.fileNumber || selectedOrder.recipients?.phone || 'غير معروف';
 
     return (
       <div className="min-h-screen bg-gray-50 pb-32" dir="rtl">
@@ -553,7 +554,7 @@ export default function WarehousePage() {
         </div>
 
         {/* Confirmation Popup */}
-        {showConfirmPopup && confirmedBasketNumber && (
+        {showConfirmPopup && confirmedBasketNumber && selectedOrder && (
           <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg p-8 max-w-md w-full">
               <div className="text-center mb-6">
@@ -564,9 +565,32 @@ export default function WarehousePage() {
                 <h2 className="text-2xl font-bold text-gray-800 mb-3">
                   يرجى ترقيم السلة
                 </h2>
-                <p className="text-xl text-error font-bold">
+                <p className="text-xl text-error font-bold mb-4">
                   هل كتبت رقم السلة على الكيس؟
                 </p>
+                
+                {/* تذكير الكيس الإضافي - يظهر فقط إذا الوزن ≥ 15 كغ */}
+                {(selectedOrder.order_items
+                  .reduce((sum, item) => {
+                    if (item.warehouse_status === 'checked') {
+                      return sum + (item.quantity * (item.products.unit_weight || 1000));
+                    }
+                    if (item.warehouse_status === 'issue' && item.warehouse_notes) {
+                      const shortage = parseInt(item.warehouse_notes) || 0;
+                      const actualQuantity = item.quantity - shortage;
+                      return sum + (actualQuantity * (item.products.unit_weight || 1000));
+                    }
+                    return sum;
+                  }, 0) / 1000) >= 15 && (
+                  <div className="bg-warning bg-opacity-20 border-2 border-warning rounded-lg p-4 mb-4">
+                    <div className="flex items-center gap-2 justify-center">
+                      <span className="text-3xl">⚠️</span>
+                      <p className="text-lg font-bold text-warning">
+                        هل وضعت كيس إضافي في السلة؟
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -590,9 +614,33 @@ export default function WarehousePage() {
     );
   }
 
-  const availableOrders = orders.filter(
-    o => o.warehouse_status === 'pending'
-  );
+  // فلترة وترتيب الطلبات - تحسين الأداء
+  // API يرجع pending + in_progress لتطابق صفحة الأدمن
+  const totalRemainingOrders = orders.length; // العدد الكلي (pending + in_progress)
+  
+  const availableOrders = orders
+    .filter(o => {
+      // فلتر الحالة أولاً: فقط pending (المتاحة للتجهيز)
+      if (o.warehouse_status !== 'pending') return false;
+      
+      // فلتر البحث فقط إذا كان موجود
+      if (searchQuery) {
+        const fileNumber = o.recipients.fileNumber || o.recipients.phone || '';
+        return fileNumber.toLowerCase().includes(searchQuery.toLowerCase());
+      }
+      
+      return true;
+    })
+    .sort((a, b) => {
+      // ترتيب حسب الوزن من الأقل إلى الأكثر
+      const weightA = a.order_items.reduce((sum, item) => 
+        sum + (item.quantity * (item.products.unit_weight || 1000)), 0
+      );
+      const weightB = b.order_items.reduce((sum, item) => 
+        sum + (item.quantity * (item.products.unit_weight || 1000)), 0
+      );
+      return weightA - weightB; // الأقل وزناً أولاً
+    });
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
@@ -615,20 +663,43 @@ export default function WarehousePage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* صندوق البحث */}
+        <div className="bg-white rounded-lg shadow p-4 mb-4">
+          <label className="block text-lg font-bold mb-2">🔍 البحث عن رقم الملف:</label>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="اكتب رقم الملف أو رقم الهاتف..."
+            className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-lg"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-2 text-error font-bold"
+            >
+              ✕ مسح البحث
+            </button>
+          )}
+        </div>
+
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <div className="flex justify-between items-center">
             <span className="text-lg font-bold">الطلبات المتبقية</span>
-            <span className="text-3xl font-bold text-primary">{availableOrders.length}</span>
+            <span className="text-3xl font-bold text-primary">{totalRemainingOrders}</span>
           </div>
         </div>
         {availableOrders.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="text-6xl mb-4">✅</div>
+            <div className="text-6xl mb-4">{searchQuery ? '🔍' : '✅'}</div>
             <p className="text-2xl font-bold text-success mb-2">
-              رائع! لا توجد طلبات جديدة
+              {searchQuery ? 'لا توجد نتائج' : 'رائع! لا توجد طلبات جديدة'}
             </p>
             <p className="text-gray-500 mt-4">
-              جميع الطلبات تم تجهيزها أو قيد التجهيز من قبل عمال آخرين
+              {searchQuery 
+                ? 'لم يتم العثور على طلبات تطابق البحث'
+                : 'جميع الطلبات تم تجهيزها أو قيد التجهيز من قبل عمال آخرين'
+              }
             </p>
             <p className="text-sm text-gray-400 mt-6">
               الصفحة تتحدث تلقائياً كل ثانيتين
@@ -639,6 +710,9 @@ export default function WarehousePage() {
             {availableOrders.map((order) => {
               const isProcessing = processingOrderId === order.id;
               const fileNumber = order.recipients.fileNumber || order.recipients.phone;
+              const totalWeight = (order.order_items.reduce((sum, item) => 
+                sum + (item.quantity * (item.products.unit_weight || 1000)), 0
+              ) / 1000).toFixed(2);
               
               return (
                 <div
@@ -653,6 +727,12 @@ export default function WarehousePage() {
                       <p className="text-gray-600">
                         عدد المواد: {order.order_items.length}
                       </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-600">وزن السلة</div>
+                      <div className="text-2xl font-bold text-primary">
+                        {totalWeight} كغ
+                      </div>
                     </div>
                   </div>
 

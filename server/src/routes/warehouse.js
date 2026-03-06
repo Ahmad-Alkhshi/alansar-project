@@ -10,7 +10,7 @@ const supabase = createClient(
 // Get all orders ready for warehouse
 router.get('/orders', async (req, res) => {
   try {
-    // جلب الطلبات المتاحة والطلبات قيد التجهيز
+    // جلب الطلبات المتاحة (pending + in_progress) لتطابق صفحة الأدمن
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -21,8 +21,9 @@ router.get('/orders', async (req, res) => {
           products (id, name, price, display_order, unit_weight, unit)
         )
       `)
-      .in('warehouse_status', ['pending', 'in_progress', 'preparing_complete', 'has_issues'])
-      .order('created_at', { ascending: true });
+      .in('warehouse_status', ['pending', 'in_progress'])
+      .order('created_at', { ascending: true })
+      .limit(300); // حد أقصى 300 طلب لتحسين الأداء
 
     if (error) {
       console.error('Supabase error:', error);
@@ -58,10 +59,7 @@ router.get('/orders', async (req, res) => {
 router.post('/orders/:orderId/lock', async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { workerId } = req.body;
-
-    // DON'T unlock previous orders - let worker keep their work after refresh
-    // Only unlock if they're selecting a DIFFERENT order
+    const { workerId, isRefresh } = req.body;
 
     // Check if order exists and its current status
     const { data: existingOrder } = await supabase
@@ -74,9 +72,26 @@ router.post('/orders/:orderId/lock', async (req, res) => {
       return res.status(404).json({ error: 'الطلب غير موجود' });
     }
 
-    // If order is already locked by this worker, just return it (refresh case)
+    // If order is already locked by this worker (refresh case)
     if (existingOrder.warehouse_locked_by === workerId) {
       console.log(`Order ${orderId} already locked by worker ${workerId} - refresh case`);
+      
+      // If this is a refresh, reset the items to pending
+      if (isRefresh) {
+        console.log(`Resetting items for order ${orderId} due to refresh`);
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .update({
+            warehouse_status: 'pending',
+            warehouse_notes: null
+          })
+          .eq('order_id', orderId);
+
+        if (itemsError) {
+          console.error('Error resetting order items on refresh:', itemsError);
+        }
+      }
+      
       const { data } = await supabase
         .from('orders')
         .select()
@@ -226,12 +241,28 @@ router.post('/orders/:orderId/confirm', async (req, res) => {
     const { orderId } = req.params;
     const { workerId, workerName } = req.body;
 
-    // Just update status to completed and add worker info
-    // Basket number is already reserved from /complete endpoint
+    // التحقق من وجود basket_number قبل التأكيد
+    const { data: orderCheck } = await supabase
+      .from('orders')
+      .select('basket_number, warehouse_status')
+      .eq('id', orderId)
+      .single();
+
+    if (!orderCheck || !orderCheck.basket_number) {
+      return res.status(400).json({ 
+        error: 'لا يمكن تأكيد الطلب بدون رقم سلة. يرجى المحاولة مرة أخرى.' 
+      });
+    }
+
+    // الحالة النهائية تعتمد على الحالة الحالية
+    // إذا كانت has_issues تبقى has_issues، وإلا تصير completed
+    const finalStatus = orderCheck.warehouse_status === 'has_issues' ? 'has_issues' : 'completed';
+
+    // Update status and add worker info
     const { data, error } = await supabase
       .from('orders')
       .update({
-        warehouse_status: 'completed',
+        warehouse_status: finalStatus,
         warehouse_locked_by: null,
         warehouse_locked_at: null,
         worker_id: workerId || null,
@@ -242,6 +273,8 @@ router.post('/orders/:orderId/confirm', async (req, res) => {
       .single();
 
     if (error) throw error;
+    
+    console.log(`Order ${orderId} confirmed with basket number: ${orderCheck.basket_number}, status: ${finalStatus}`);
     res.json(data);
   } catch (error) {
     console.error('Error confirming basket:', error);
@@ -269,8 +302,20 @@ router.post('/orders/:orderId/cancel-basket', async (req, res) => {
 
     if (error) throw error;
 
-    // Keep order items as they are (don't reset - worker keeps selections after refresh)
-    console.log(`Order ${orderId} went back to editing, basket number cleared, items kept`);
+    // Reset all order items to pending (clear worker selections)
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .update({
+        warehouse_status: 'pending',
+        warehouse_notes: null
+      })
+      .eq('order_id', orderId);
+
+    if (itemsError) {
+      console.error('Error resetting order items:', itemsError);
+    }
+
+    console.log(`Order ${orderId} went back to editing, basket number and items cleared`);
     res.json(data);
   } catch (error) {
     console.error('Error going back:', error);

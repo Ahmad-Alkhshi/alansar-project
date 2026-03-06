@@ -199,6 +199,44 @@ router.delete('/:workerId', async (req, res) => {
   try {
     const { workerId } = req.params;
 
+    // أولاً: إلغاء حجز كل الطلبات المقفولة من هذا العامل
+    const { error: unlockError } = await supabase
+      .from('orders')
+      .update({
+        warehouse_status: 'pending',
+        warehouse_locked_by: null,
+        warehouse_locked_at: null,
+        basket_number: null,
+        basket_number_reserved: null,
+        warehouse_notes: null
+      })
+      .eq('warehouse_locked_by', workerId)
+      .in('warehouse_status', ['in_progress', 'preparing_complete']);
+
+    if (unlockError) {
+      console.error('Error unlocking orders:', unlockError);
+      // نكمل حتى لو في خطأ
+    }
+
+    // إعادة تعيين المواد المقفولة
+    const { data: lockedOrders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('warehouse_locked_by', workerId);
+
+    if (lockedOrders && lockedOrders.length > 0) {
+      for (const order of lockedOrders) {
+        await supabase
+          .from('order_items')
+          .update({
+            warehouse_status: 'pending',
+            warehouse_notes: null
+          })
+          .eq('order_id', order.id);
+      }
+    }
+
+    // ثانياً: حذف العامل
     const { error } = await supabase
       .from('workers')
       .delete()
@@ -206,7 +244,10 @@ router.delete('/:workerId', async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ message: 'تم حذف العامل بنجاح' });
+    res.json({ 
+      message: 'تم حذف العامل بنجاح وإلغاء حجز الطلبات المقفولة',
+      unlockedOrders: lockedOrders?.length || 0
+    });
   } catch (error) {
     console.error('Error deleting worker:', error);
     res.status(500).json({ error: error.message });

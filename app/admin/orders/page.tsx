@@ -59,6 +59,7 @@ export default function AdminOrdersPage() {
   const [editDeadlineDays, setEditDeadlineDays] = useState(2);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showCopyMessage, setShowCopyMessage] = useState(false);
+  const [basketNumberSearch, setBasketNumberSearch] = useState("");
 
   const warehouseUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/warehouse/warehouse-access`
@@ -197,11 +198,25 @@ export default function AdminOrdersPage() {
   const pendingRequests = editRequests.filter((r) => r.status === "pending");
 
   const filteredOrders = orders.filter(order => {
-    if (filterStatus === "all") return true;
-    if (filterStatus === "has_issues") return order.warehouse_status === "has_issues";
-    if (filterStatus === "completed") return order.warehouse_status === "completed";
-    if (filterStatus === "pending") return order.warehouse_status === "pending";
-    if (filterStatus === "in_progress") return order.warehouse_status === "in_progress";
+    // فلتر حسب الحالة
+    if (filterStatus === "all") {
+      // لا فلتر
+    } else if (filterStatus === "has_issues") {
+      if (order.warehouse_status !== "has_issues") return false;
+    } else if (filterStatus === "completed") {
+      if (order.warehouse_status !== "completed") return false;
+    } else if (filterStatus === "pending") {
+      // بانتظار التجهيز يشمل pending و in_progress
+      if (order.warehouse_status !== "pending" && order.warehouse_status !== "in_progress") return false;
+    }
+    
+    // فلتر حسب رقم السلة (فقط للطلبات المجهزة)
+    if (filterStatus === "completed" && basketNumberSearch) {
+      const searchNumber = parseInt(basketNumberSearch);
+      if (isNaN(searchNumber)) return false;
+      if (order.basket_number !== searchNumber) return false;
+    }
+    
     return true;
   });
 
@@ -219,13 +234,6 @@ export default function AdminOrdersPage() {
             >
               <span>إعادة تجهيز كل الطلبات</span>
             </button>
-            <button
-              onClick={copyWarehouseLink}
-              className="bg-success text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center gap-2"
-            >
-              <span>📋</span>
-              <span>نسخ رابط المستودع</span>
-            </button>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
@@ -233,14 +241,37 @@ export default function AdminOrdersPage() {
             >
               <option value="all">كل الطلبات</option>
               <option value="pending">بانتظار التجهيز</option>
-              <option value="in_progress">قيد التجهيز</option>
               <option value="completed">تم التجهيز</option>
               <option value="has_issues">فيها مشاكل</option>
             </select>
             <div className="bg-white rounded-lg shadow px-6 py-3">
-              <span className="text-gray-600 ml-2">عدد المسجلين:</span>
-              <span className="text-2xl font-bold text-primary">{orders.length}</span>
+              <span className="text-gray-600 ml-2">
+                {filterStatus === 'all' && 'عدد المسجلين:'}
+                {filterStatus === 'pending' && 'بانتظار التجهيز:'}
+                {filterStatus === 'completed' && 'تم التجهيز:'}
+                {filterStatus === 'has_issues' && 'فيها مشاكل:'}
+              </span>
+              <span className="text-2xl font-bold text-primary">{filteredOrders.length}</span>
             </div>
+            {filterStatus === 'completed' && (
+              <div className="bg-white rounded-lg shadow px-4 py-2">
+                <input
+                  type="number"
+                  value={basketNumberSearch}
+                  onChange={(e) => setBasketNumberSearch(e.target.value)}
+                  placeholder="🔍 ابحث عن رقم السلة..."
+                  className="border-2 border-gray-300 rounded-lg px-4 py-2 text-lg w-64"
+                />
+                {basketNumberSearch && (
+                  <button
+                    onClick={() => setBasketNumberSearch('')}
+                    className="mr-2 text-error font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
